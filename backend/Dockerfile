@@ -8,7 +8,7 @@ RUN pip install  -r requirements.txt
 
 COPY . .
 
-WORKDIR /app/fastapi
+ENV PYTHONPATH=/app
 
 EXPOSE 8000
 

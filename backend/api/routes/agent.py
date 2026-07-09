@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from services.agent_service import *
+from api.services.agent_service import check_agent_health
 
 
 router = APIRouter(prefix="/agent")

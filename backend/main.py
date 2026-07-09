@@ -3,7 +3,7 @@ from mangum import Mangum
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from routes.agent import router as agent_router
+from api.routes.agent import router as agent_router
 
 load_dotenv()
 
