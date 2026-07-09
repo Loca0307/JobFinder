@@ -1,0 +1,18 @@
+fastapi
+uvicorn
+python-dotenv
+
+# For app models extending "BaseModel"
+pydantic 
+# For SQL models extending "Base"  
+sqlalchemy
+
+# AWS dynamo db
+mangum
+boto3
+botocore
+
+# AI setupL langgraph/langchain
+langgraph
+langchain-openai
+langchain-core
