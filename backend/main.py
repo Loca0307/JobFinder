@@ -3,7 +3,7 @@ from mangum import Mangum
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from api.routes.agent import router as agent_router
+from api.routes.jobs import router as jobs_router
 
 load_dotenv()
 
@@ -18,7 +18,7 @@ app.add_middleware(
 )
 
 
-app.include_router(agent_router)
+app.include_router(jobs_router)
 
 
 handler = Mangum(app, lifespan="off")

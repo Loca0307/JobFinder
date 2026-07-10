@@ -8,7 +8,7 @@ initially on Switzerland.
 The system should:
 
 1.  Scrape job offers from the main Swiss job websites.
-2.  Store scraped job offers in a structured PostgreSQL database.
+2.  Store scraped job offers in DynamoDB for AWS/Lambda deployment.
 3.  Later expand to scraping company/business career pages directly.
 4.  Use AI to classify and score job offers based on each user's
     profile.
@@ -31,12 +31,11 @@ Preferred stack:
 
 -   Backend: Python
 -   API: FastAPI
--   Database: PostgreSQL
+-   Database: DynamoDB
 -   Scraping: BeautifulSoup, Requests, Playwright when needed
 -   AI/LLM: Start with local Ollama if possible, later allow OpenAI or
     other providers
 -   Frontend: Next.js with React and TypeScript
--   ORM: SQLAlchemy or SQLModel
 -   Migrations: Alembic
 -   Package management:
     -   Backend: uv or pip
@@ -73,6 +72,13 @@ AGENTS.md
 ```
 
 ------------------------------------------------------------------------
+
+## Side work
+
+# Important command:
+Every time a complete new feature gets implemented, update the ARCHITECTURE.md file with a new section with the feature name as the title and some bullet points and short text describing how the feature got implemented. A bit more deeply, explain the flow in the project that the feature follow, especially the file it uses. If the implmenentation of a feature gets changed, also update its section. Also at the top of the file keep a list of "tech stack" used in the project, these are meant also libraries specific for some tasks.
+
+-------------------------------------------------------------------------
 
 ## Core Features
 
@@ -147,17 +153,17 @@ Future ATS support:
 
 ### 3. Database
 
-Use PostgreSQL.
+Use DynamoDB.
 
-Main tables:
+Initial item types in the jobs table:
 
--   users
--   user_profiles
--   jobs
--   job_sources
--   job_scores
--   applications
--   scrape_runs
+-   source items
+-   job items
+-   scrape run items
+-   user items
+-   user profile items
+-   job score items
+-   application items
 
 Jobs should be deduplicated.
 
@@ -345,7 +351,7 @@ Success criteria:
 
 -   User profile management
 -   Scrape at least one Swiss job board
--   Save jobs to PostgreSQL
+-   Save jobs to DynamoDB
 -   Deduplicate jobs
 -   AI job scoring
 -   Skill-gap analysis
@@ -371,7 +377,9 @@ Success criteria:
 ## Environment Variables
 
 ``` text
-DATABASE_URL=
+DYNAMODB_JOBS_TABLE=
+DYNAMODB_ENDPOINT_URL=
+AWS_REGION=
 OLLAMA_BASE_URL=
 OLLAMA_MODEL=
 OPENAI_API_KEY=
