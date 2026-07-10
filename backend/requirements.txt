@@ -19,3 +19,4 @@ langchain-core
 # Web scraping
 requests
 beautifulsoup4
+bs4
