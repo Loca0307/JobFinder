@@ -2,3 +2,5 @@
 venv/
 /package
 .vscode/
+.terraform/
+terraform.*

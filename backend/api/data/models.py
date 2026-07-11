@@ -10,7 +10,7 @@ from api.data.schemas import NormalizedJob
 # ----- Helper methods for data setting -----
 
 def utc_now_iso() -> str:
-    return datetime.now(datetime.timezone.now).isoformat() + "Z"
+    return datetime.now(datetime.timezone).isoformat() + "Z"
 
 
 def new_id() -> str:
