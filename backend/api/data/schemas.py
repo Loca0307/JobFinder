@@ -39,6 +39,9 @@ class JobRead(BaseModel):
     employment_type: Optional[str] = None
     remote_type: Optional[str] = None
     salary: Optional[str] = None
+    required_languages: List[str] = Field(default_factory=list)
+    source_website: Optional[str] = None
+    source_url: Optional[str] = None
     apply_url: Optional[str] = None
     posting_date: Optional[datetime] = None
 

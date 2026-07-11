@@ -6,3 +6,8 @@ venv/
 terraform.*
 .terraform.*
 build/
+.next/
+lib/
+!frontend/lib/
+!frontend/lib/**
+node_modules/

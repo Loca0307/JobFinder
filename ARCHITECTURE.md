@@ -5,6 +5,7 @@
 - Backend: Python, FastAPI, Pydantic
 - Database: DynamoDB through boto3
 - Scraping: Requests and BeautifulSoup
+- Frontend: Next.js, React, TypeScript
 - Deployment: Docker Compose
 - Existing AI dependencies: LangGraph, LangChain OpenAI
 
@@ -43,3 +44,12 @@
   - `jobs_table_name` for Lambda environment configuration.
   - `jobs_table_arn` for infrastructure wiring.
   - `jobs_table_access_policy_json` for attaching DynamoDB permissions to the backend Lambda role.
+
+## Jobs Frontend MVP
+
+- The frontend lives in `frontend/` and uses Next.js with React and TypeScript.
+- `frontend/app/page.tsx` is the initial jobs dashboard. It fetches stored jobs from the backend `GET /jobs` endpoint, keeps filtering client-side, and shows a selected-job detail pane.
+- `frontend/lib/jobs.ts` owns the API call and reads `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000` for local development.
+- `frontend/types/job.ts` mirrors the `JobRead` response from `backend/api/data/schemas.py`.
+- `backend/api/data/schemas.py` now includes source website, source URL, and required languages in `JobRead` so the UI can display where each scraped job came from.
+- `docker-compose.yaml` includes a `frontend` service on port `3000`. The browser talks to the FastAPI backend on `http://localhost:8000`, and the backend continues to read jobs from DynamoDB.
