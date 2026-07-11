@@ -39,7 +39,6 @@ resource "aws_lambda_function" "fastapi" {
 
   environment {
     variables = {
-      AWS_REGION          = var.aws_region
       DYNAMODB_JOBS_TABLE = aws_dynamodb_table.jobs.name
     }
   }
