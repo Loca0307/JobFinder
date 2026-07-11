@@ -6,8 +6,9 @@ services:
     env_file:
       ./backend/.env
     environment:
-      AWS_REGION: eu-central-1
       DYNAMODB_JOBS_TABLE: Jobs
       SCRAPER_USER_AGENT: JobFinderBot/0.1
+      AWS_REGION: eu-south-1
+      
     ports:
       - "8000:8000"

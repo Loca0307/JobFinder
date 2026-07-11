@@ -31,23 +31,16 @@ class NormalizedJob(BaseModel):
 class JobRead(BaseModel):
     id: str
     title: str
-    company: Optional[str]
-    location: Optional[str]
-    description: Optional[str]
-    requirements: Optional[str]
-    seniority: Optional[str]
-    employment_type: Optional[str]
-    remote_type: Optional[str]
-    salary: Optional[str]
-    required_languages: List[str]
-    source_website: str
-    source_url: str
-    apply_url: Optional[str]
-    posting_date: Optional[datetime]
-    scrape_timestamp: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
+    company: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    requirements: Optional[str] = None
+    seniority: Optional[str] = None
+    employment_type: Optional[str] = None
+    remote_type: Optional[str] = None
+    salary: Optional[str] = None
+    apply_url: Optional[str] = None
+    posting_date: Optional[datetime] = None
 
 # Parameters for requests sent by agent to scrape jobs
 class JobScrapeRequest(BaseModel):
