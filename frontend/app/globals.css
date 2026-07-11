@@ -42,9 +42,153 @@ select {
 }
 
 .topbar,
+.scrapePanel,
 .filters,
+.storedFilters,
 .workspace {
   width: 100%;
+}
+
+.storedFilters {
+  align-items: end;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(220px, 1fr) minmax(180px, 0.7fr) auto;
+  margin: 0 0 18px;
+  padding: 18px 22px;
+}
+
+.storedFilters label {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.storedFilters input,
+.storedFilters button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 44px;
+}
+
+.storedFilters input {
+  background: var(--surface-muted);
+  color: var(--text);
+  padding: 0 14px;
+}
+
+.storedFilters button {
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0 16px;
+}
+
+.storedFilters button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.filterHeading > p:last-child {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.scrapePanel {
+  background: linear-gradient(135deg, #e7f5f2 0%, #f4faf9 100%);
+  border: 1px solid #b9ddd7;
+  border-radius: 12px;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(210px, 0.7fr) minmax(500px, 1.3fr);
+  margin-top: 26px;
+  padding: 22px;
+}
+
+.scrapeIntro h2,
+.filterHeading h2 {
+  margin-bottom: 6px;
+}
+
+.scrapeIntro > p:last-child {
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+
+.scrapeForm {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(170px, 1fr) minmax(150px, 0.8fr) 82px auto;
+}
+
+.scrapeForm label,
+.filters label {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.scrapeForm input,
+.scrapeForm select,
+.scrapeForm button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 46px;
+}
+
+.scrapeForm input,
+.scrapeForm select {
+  background: var(--surface);
+  color: var(--text);
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.scrapeForm button {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0 18px;
+  white-space: nowrap;
+}
+
+.scrapeForm button:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.scrapeForm button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.scrapeMessage {
+  border-radius: 8px;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 11px 13px;
+}
+
+.scrapeMessage.success {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--accent-strong);
+}
+
+.scrapeMessage.error {
+  background: #fff4f2;
+  color: var(--danger);
 }
 
 .topbar {
@@ -126,18 +270,19 @@ dt {
 }
 
 .filters {
+  align-items: end;
+  background: linear-gradient(135deg, #e7f5f2 0%, #f4faf9 100%);
+  border: 1px solid #b9ddd7;
+  border-radius: 12px;
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(220px, 1fr) minmax(180px, 280px);
+  grid-template-columns: minmax(180px, 0.55fr) minmax(220px, 1fr) minmax(160px, 0.7fr) 82px auto;
   margin: 26px 0 18px;
+  padding: 22px;
 }
 
-.filters label {
-  color: var(--muted);
-  display: grid;
-  font-size: 13px;
-  font-weight: 700;
-  gap: 8px;
+.filterHeading {
+  align-self: end;
 }
 
 .filters input,
@@ -148,6 +293,27 @@ dt {
   color: var(--text);
   min-height: 46px;
   padding: 0 14px;
+}
+
+.filters > button {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 46px;
+  padding: 0 18px;
+  white-space: nowrap;
+}
+
+.filters > button:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.filters > button:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .workspace {
@@ -319,6 +485,9 @@ dd {
   }
 
   .filters,
+  .scrapePanel,
+  .scrapeForm,
+  .storedFilters,
   .workspace,
   .facts {
     grid-template-columns: 1fr;

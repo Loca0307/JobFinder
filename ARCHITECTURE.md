@@ -53,3 +53,11 @@
 - `frontend/types/job.ts` mirrors the `JobRead` response from `backend/api/data/schemas.py`.
 - `backend/api/data/schemas.py` now includes source website, source URL, and required languages in `JobRead` so the UI can display where each scraped job came from.
 - `docker-compose.yaml` includes a `frontend` service on port `3000`. The browser talks to the FastAPI backend on `http://localhost:8000`, and the backend continues to read jobs from DynamoDB.
+
+## jobs.ch Search Form
+
+- The dashboard's primary search bar is exclusively a jobs.ch scrape launcher. Typing does not filter or otherwise modify the stored job list.
+- `frontend/app/page.tsx` sends the search term, location, and one-to-five-page limit when the form is submitted or Enter is pressed. It displays progress, reports the run's found/created/updated counts, and refreshes the stored job list after success.
+- A separate, explicitly labeled local-filter panel narrows stored jobs by keywords and location without making a scraper request. Its filters can be cleared independently and the dashboard shows both stored and currently visible counts.
+- `frontend/lib/jobs.ts` sends the form as JSON to `POST /jobs/scrape/jobs-ch` and converts unsuccessful API responses into user-visible errors. Both listing and scraping use `NEXT_PUBLIC_API_BASE_URL`, with local port `8000` as the fallback.
+- `frontend/types/job.ts` mirrors the scrape request and scrape-run response schemas so the UI-to-API flow remains type-safe.

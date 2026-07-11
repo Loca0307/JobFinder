@@ -15,3 +15,24 @@ export type Job = {
   apply_url?: string | null;
   posting_date?: string | null;
 };
+
+export type JobScrapeRequest = {
+  search_term?: string;
+  location?: string;
+  pages: number;
+};
+
+export type ScrapeRun = {
+  id: string;
+  status: string;
+  source_id: string;
+  search_term?: string | null;
+  location?: string | null;
+  pages_requested: number;
+  jobs_found: number;
+  jobs_created: number;
+  jobs_updated: number;
+  error_message?: string | null;
+  started_at: string;
+  finished_at?: string | null;
+};
