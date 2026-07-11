@@ -386,3 +386,13 @@ OPENAI_API_KEY=
 AI_PROVIDER=
 SCRAPER_USER_AGENT=
 ```
+
+
+-------------------------------------
+
+## Codex instructions
+
+1) 
+When implementing features and most importantly during edits
+at the code base implement the fixes as simply as possible if not specified, edit as less code as possible to fix the problems
+ 
