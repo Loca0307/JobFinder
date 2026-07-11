@@ -6,7 +6,7 @@ variable "aws_region" {
 
 variable "function_name" {
     type = string
-    default = "Job-fastapi"
+    default = "JobFinder-fastapi"
 }
 
 variable "jobs_table_name" {

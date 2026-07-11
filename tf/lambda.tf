@@ -2,7 +2,7 @@ resource "null_resource" "api_package" {
   triggers = {
     api_hash                = sha256(join("", [for file in fileset("${path.module}/../backend/api", "**") : filesha256("${path.module}/../backend/api/${file}")]))
     app_hash                = filesha256("${path.module}/../backend/main.py")
-    package_command_version = "4"
+    package_command_version = "6"
     requirements_hash       = filesha256("${path.module}/../backend/requirements.txt")
   }
 
@@ -12,7 +12,7 @@ resource "null_resource" "api_package" {
     command = <<-EOT
       rm -rf build
       mkdir -p build/package
-      python3 -m pip install --platform manylinux2014_x86_64 --implementation cp --python-version 3.11 --only-binary=:all: --upgrade -r ../backend/requirements.txt -t build/package
+      python3 -m pip install --platform manylinux2014_x86_64 --implementation cp --python-version 3.9 --only-binary=:all: --upgrade -r ../backend/requirements.txt -t build/package
       cp ../backend/main.py build/package/main.py
       cp -R ../backend/api build/package/api
     EOT
@@ -32,7 +32,7 @@ resource "aws_lambda_function" "fastapi" {
   function_name    = var.function_name
   role             = aws_iam_role.lambda_role.arn
   handler          = "main.handler"
-  runtime          = "python3.11"
+  runtime          = "python3.9"
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   timeout          = 15
@@ -63,9 +63,8 @@ resource "aws_lambda_permission" "allow_public_function_url" {
 }
 
 resource "aws_lambda_permission" "allow_public_function_url_invoke" {
-  statement_id             = "AllowPublicFunctionUrlInvoke"
-  action                   = "lambda:InvokeFunction"
-  function_name            = aws_lambda_function.fastapi.function_name
-  principal                = "*"
-  invoked_via_function_url = true
+  statement_id  = "AllowPublicFunctionUrlInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.fastapi.function_name
+  principal     = "*"
 }

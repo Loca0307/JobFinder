@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import boto3
 from botocore.exceptions import ClientError
 
-from api.core.config import get_settings
+from api.settings.config import get_settings
 from api.data.models import (
     job_partition_key,
     make_job_item,

@@ -9,7 +9,7 @@ from urllib.parse import urljoin
 
 import requests
 
-from api.core.config import get_settings
+from api.settings.config import get_settings
 from api.data.schemas import NormalizedJob
 from api.scrapers.base import BaseJobScraper
 
