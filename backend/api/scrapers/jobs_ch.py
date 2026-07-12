@@ -12,21 +12,9 @@ import requests
 from api.settings.config import get_settings
 from api.data.schemas import NormalizedJob
 from api.scrapers.base import BaseJobScraper
+from api.services.location_normalization import normalize_location
 
 logger = logging.getLogger(__name__)
-
-LOCATION_ALIASES = {
-    "zurigo": "Zürich",
-    "zurich": "Zürich",
-    "ginevra": "Genève",
-    "geneva": "Genève",
-    "basilea": "Basel",
-    "bale": "Basel",
-    "berna": "Bern",
-    "lucerna": "Luzern",
-    "lausanne": "Lausanne",
-    "losanna": "Lausanne",
-}
 
 
 # Job scraper, sub class of BaseJobScraper, useds to scrape jobs.ch website
@@ -90,7 +78,7 @@ class JobsChScraper(BaseJobScraper):
         if search_term:
             params.append(f"term={requests.utils.quote(search_term)}")
         if location:
-            normalized_location = LOCATION_ALIASES.get(location.strip().casefold(), location)
+            normalized_location = normalize_location(location)
             params.append(f"location={requests.utils.quote(normalized_location)}")
         if page > 1:
             params.append(f"page={page}")

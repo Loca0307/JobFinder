@@ -19,14 +19,19 @@ export default function Home() {
         <div className="flex gap-2">
           <div className="min-w-24 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <span className="block text-xl font-extrabold">{dashboard.jobs.length}</span>
-            <small className="text-slate-500">shown</small>
+            <small className="text-slate-500">jobs found</small>
           </div>
-          {dashboard.lastRun ? (
-            <div className="min-w-24 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <span className="block text-xl font-extrabold">{dashboard.lastRun.jobs_found}</span>
-              <small className="text-slate-500">last scrape</small>
-            </div>
-          ) : null}
+          <div className="min-w-24 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <span className="block text-xl font-extrabold">{dashboard.storedJobCount}</span>
+            <small className="text-slate-500">stored in DB</small>
+          </div>
+          <button
+            type="button"
+            onClick={dashboard.clearAllSearches}
+            className="rounded-lg border border-slate-200 bg-white px-4 font-bold text-slate-700 shadow-sm transition hover:bg-slate-100"
+          >
+            Clear searches
+          </button>
         </div>
       </header>
 

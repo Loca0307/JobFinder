@@ -45,7 +45,7 @@ export function StoredJobsSearchForm(props: Props) {
       <button
         type="submit"
         disabled={props.isLoading}
-        className="min-h-12 rounded-lg border border-slate-300 bg-white px-5 font-bold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+        className="min-h-12 rounded-lg border border-slate-300 bg-white px-5 font-bold whitespace-nowrap text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
       >
         {props.isLoading ? "Searching…" : "Search database"}
       </button>

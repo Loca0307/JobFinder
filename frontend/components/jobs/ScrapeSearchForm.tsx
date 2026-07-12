@@ -47,7 +47,7 @@ export function ScrapeSearchForm(props: Props) {
       <button
         type="submit"
         disabled={props.isLoading}
-        className="min-h-12 rounded-lg bg-teal-700 px-5 font-extrabold text-white transition hover:bg-teal-800 disabled:cursor-wait disabled:opacity-60"
+        className="min-h-12 rounded-lg bg-teal-700 px-5 font-extrabold whitespace-nowrap text-white transition hover:bg-teal-800 disabled:cursor-wait disabled:opacity-60"
       >
         {props.isLoading ? "Scraping…" : "Search jobs.ch"}
       </button>

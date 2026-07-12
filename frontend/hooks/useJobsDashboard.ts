@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { fetchJobs, scrapeJobsCh } from "@/lib/jobs";
+import { useEffect, useMemo, useState } from "react";
+import { fetchJobCount, fetchJobs, scrapeJobsCh } from "@/lib/jobs";
 import type { Job, ScrapeRun } from "@/types/job";
 
 export function useJobsDashboard() {
@@ -15,6 +15,19 @@ export function useJobsDashboard() {
   const [isSearchingStored, setIsSearchingStored] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<ScrapeRun | null>(null);
+  const [storedJobCount, setStoredJobCount] = useState(0);
+
+  async function refreshStoredJobCount() {
+    try {
+      setStoredJobCount(await fetchJobCount());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load job count");
+    }
+  }
+
+  useEffect(() => {
+    void refreshStoredJobCount();
+  }, []);
 
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedId) ?? jobs[0] ?? null,
@@ -24,6 +37,20 @@ export function useJobsDashboard() {
   function showJobs(nextJobs: Job[]) {
     setJobs(nextJobs);
     setSelectedId(nextJobs[0]?.id ?? null);
+  }
+
+  function clearResults() {
+    showJobs([]);
+    setLastRun(null);
+    setError(null);
+  }
+
+  function clearAllSearches() {
+    setScrapeTerm("");
+    setScrapeLocation("");
+    setStoredTerm("");
+    setStoredLocation("");
+    clearResults();
   }
 
   async function searchJobsCh() {
@@ -36,6 +63,7 @@ export function useJobsDashboard() {
       });
       setLastRun(run);
       showJobs(run.jobs);
+      await refreshStoredJobCount();
     } catch (err) {
       setError(err instanceof Error ? err.message : "jobs.ch search failed");
     } finally {
@@ -74,7 +102,9 @@ export function useJobsDashboard() {
     isSearchingStored,
     error,
     lastRun,
+    storedJobCount,
     searchJobsCh,
-    searchStoredJobs
+    searchStoredJobs,
+    clearAllSearches
   };
 }

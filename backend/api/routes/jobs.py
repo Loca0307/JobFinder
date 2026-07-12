@@ -8,6 +8,7 @@ from api.data.schemas import JobRead, JobScrapeRequest, ScrapeRunRead
 from api.data.models import job_id
 from api.scrapers.jobs_ch import JobsChScraper
 from api.services.job_ingestion import (
+    count_jobs,
     finish_scrape_run,
     get_or_create_source,
     list_jobs as list_stored_jobs,
@@ -21,6 +22,11 @@ JOBS_CH_PAGES_PER_RUN = 5
 #@router.get("health")
 #def health(x):
     
+
+
+@router.get("/count")
+def get_job_count() -> dict[str, int]:
+    return {"count": count_jobs()}
 
 
 @router.get("", response_model=List[JobRead])

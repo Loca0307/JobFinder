@@ -15,6 +15,7 @@ from api.data.models import (
     make_source_item,
 )
 from api.data.schemas import NormalizedJob
+from api.services.location_normalization import normalize_location
 
 
 def get_jobs_table():
@@ -27,6 +28,24 @@ def get_jobs_table():
     return dynamodb.Table(settings.dynamodb_jobs_table)
 
 
+def count_jobs() -> int:
+    table = get_jobs_table()
+    scan_args: Dict[str, Any] = {
+        "FilterExpression": "item_type = :item_type",
+        "ExpressionAttributeValues": {":item_type": "JOB"},
+        "Select": "COUNT",
+    }
+    count = 0
+
+    while True:
+        response = table.scan(**scan_args)
+        count += response.get("Count", 0)
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            return count
+        scan_args["ExclusiveStartKey"] = last_key
+
+
 def list_jobs(
     limit: int = 50,
     query: Optional[str] = None,
@@ -34,7 +53,7 @@ def list_jobs(
 ) -> List[Dict[str, Any]]:
     table = get_jobs_table()
     query_text = (query or "").strip().casefold()
-    location_text = (location or "").strip().casefold()
+    location_text = normalize_location(location).casefold()
     scan_args: Dict[str, Any] = {
         "FilterExpression": "item_type = :item_type",
         "ExpressionAttributeValues": {":item_type": "JOB"},
