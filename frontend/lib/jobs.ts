@@ -1,9 +1,12 @@
 import type { Job, JobScrapeRequest, ScrapeRun } from "@/types/job";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL = "http://localhost:8000";
 
-export async function fetchJobs(limit = 50): Promise<Job[]> {
-  const response = await fetch(`${API_BASE_URL}/jobs?limit=${limit}`);
+export async function fetchJobs(limit = 50, query = "", location = ""): Promise<Job[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (query.trim()) params.set("query", query.trim());
+  if (location.trim()) params.set("location", location.trim());
+  const response = await fetch(`${API_BASE_URL}/jobs?${params.toString()}`);
 
   if (!response.ok) {
     throw new Error(`Failed to load jobs (${response.status})`);

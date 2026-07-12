@@ -31,6 +31,8 @@ export type ScrapeRun = {
   jobs_found: number;
   jobs_created: number;
   jobs_updated: number;
+  job_ids: string[];
+  jobs: Job[];
   error_message?: string | null;
   started_at: string;
   finished_at?: string | null;

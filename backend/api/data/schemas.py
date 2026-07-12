@@ -62,6 +62,8 @@ class ScrapeRunRead(BaseModel):
     jobs_found: int
     jobs_created: int
     jobs_updated: int
+    job_ids: List[str] = Field(default_factory=list)
+    jobs: List[JobRead] = Field(default_factory=list)
     error_message: Optional[str]
     started_at: datetime
     finished_at: Optional[datetime]

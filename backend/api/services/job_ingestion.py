@@ -27,15 +27,51 @@ def get_jobs_table():
     return dynamodb.Table(settings.dynamodb_jobs_table)
 
 
-def list_jobs(limit: int = 50) -> List[Dict[str, Any]]:
+def list_jobs(
+    limit: int = 50,
+    query: Optional[str] = None,
+    location: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     table = get_jobs_table()
-    response = table.scan(
-        FilterExpression="item_type = :item_type",
-        ExpressionAttributeValues={":item_type": "JOB"},
-        Limit=limit,
-    )
-    items = response.get("Items", [])
-    return sorted(items, key=lambda item: item.get("created_at", ""), reverse=True)
+    query_text = (query or "").strip().casefold()
+    location_text = (location or "").strip().casefold()
+    scan_args: Dict[str, Any] = {
+        "FilterExpression": "item_type = :item_type",
+        "ExpressionAttributeValues": {":item_type": "JOB"},
+    }
+    if not query_text and not location_text:
+        scan_args["Limit"] = limit
+
+    items: List[Dict[str, Any]] = []
+    while True:
+        response = table.scan(**scan_args)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key or (not query_text and not location_text):
+            break
+        scan_args["ExclusiveStartKey"] = last_key
+
+    matching_items = [
+        item
+        for item in items
+        if (
+            not query_text
+            or query_text
+            in " ".join(
+                str(item.get(field, ""))
+                for field in ("title", "company", "description", "requirements")
+            ).casefold()
+        )
+        and (
+            not location_text
+            or location_text in str(item.get("location", "")).casefold()
+        )
+    ]
+    return sorted(
+        matching_items,
+        key=lambda item: item.get("created_at", ""),
+        reverse=True,
+    )[:limit]
 
 # Makes sure that a source and url is saved in the db
 def get_or_create_source(name: str, base_url: str) -> Dict[str, Any]:
@@ -99,6 +135,7 @@ def finish_scrape_run(
     jobs_found: int,
     jobs_created: int,
     jobs_updated: int,
+    job_ids: Optional[List[str]] = None,
     error_message: Optional[str] = None,
 ) -> Dict[str, Any]:
     table = get_jobs_table()
@@ -108,6 +145,7 @@ def finish_scrape_run(
             "jobs_found": jobs_found,
             "jobs_created": jobs_created,
             "jobs_updated": jobs_updated,
+            "job_ids": job_ids or [],
             "error_message": error_message,
         }
     )

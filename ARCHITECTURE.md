@@ -5,7 +5,7 @@
 - Backend: Python, FastAPI, Pydantic
 - Database: DynamoDB through boto3
 - Scraping: Requests and BeautifulSoup
-- Frontend: Next.js, React, TypeScript
+- Frontend: Next.js, React, TypeScript, Tailwind CSS 4 with PostCSS
 - Deployment: Docker Compose
 - Existing AI dependencies: LangGraph, LangChain OpenAI
 
@@ -58,9 +58,12 @@
 
 - The dashboard's primary search bar is exclusively a jobs.ch scrape launcher. Typing does not filter or otherwise modify the stored job list.
 - `frontend/app/page.tsx` sends only the search term and location when the form is submitted or Enter is pressed. The backend always scrapes five pages, records that fixed count in the scrape run, and does not expose page selection in the public request schema. The UI displays progress, reports the run's found/created/updated counts, and refreshes the stored job list after success.
-- A separate, explicitly labeled local-filter panel narrows stored jobs by keywords and location without making a scraper request. Its filters can be cleared independently and the dashboard shows both stored and currently visible counts.
+- A separate, explicitly labeled stored-job form submits keyword and location filters to `GET /jobs` without starting a scraper. Clicking its search button switches the result area to database mode and shows the backend-filtered matches; typing alone does not change the list.
+- The dashboard starts with an empty result area. Each scrape run returns the normalized jobs' deterministic IDs and the frontend shows only that run's jobs, including unchanged jobs already present in DynamoDB. Clearing both fields in the scraper form switches the result area to stored-job mode, where the separate local filters apply.
 - `frontend/lib/jobs.ts` sends the form as JSON to `POST /jobs/scrape/jobs-ch` and converts unsuccessful API responses into user-visible errors. Both listing and scraping use `NEXT_PUBLIC_API_BASE_URL`, with local port `8000` as the fallback.
 - `frontend/types/job.ts` mirrors the scrape request and scrape-run response schemas so the UI-to-API flow remains type-safe.
+- The dashboard UI is split into focused modules under `frontend/components/jobs/`: independent scraper and database forms, job list, and job details. `frontend/hooks/useJobsDashboard.ts` owns API calls and the single displayed-result collection, leaving `frontend/app/page.tsx` as a thin composition layer.
+- Component styling uses Tailwind utility classes. `frontend/postcss.config.mjs` enables the Tailwind 4 PostCSS plugin, while `frontend/app/globals.css` only imports Tailwind instead of maintaining page-specific selectors.
 - jobs.ch JSON-LD requirements may be either text or a list; the scraper flattens both forms before HTML removal so valid specialist jobs are not discarded during normalization.
 - Before constructing a jobs.ch listing URL, the scraper normalizes common English, Italian, and French Swiss-city exonyms (for example, `zurigo` and `Zurich`) to the location names indexed by jobs.ch (`Zürich`). The scrape-run record retains the user's original location input.
 - Stored-job listing paginates through the DynamoDB scan, orders the complete result by update time, and only then applies the requested UI limit. This prevents DynamoDB's arbitrary scan order from hiding newly ingested jobs.
