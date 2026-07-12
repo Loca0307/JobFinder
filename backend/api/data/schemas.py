@@ -49,7 +49,6 @@ class JobRead(BaseModel):
 class JobScrapeRequest(BaseModel):
     search_term: Optional[str] = Field(default=None, max_length=255)
     location: Optional[str] = Field(default=None, max_length=255)
-    pages: int = Field(default=1, ge=1, le=5)
 
 
 # Meta data received from scraping requests

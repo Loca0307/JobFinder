@@ -276,7 +276,7 @@ dt {
   border-radius: 12px;
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(180px, 0.55fr) minmax(220px, 1fr) minmax(160px, 0.7fr) 82px auto;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(260px, 1fr) minmax(200px, 0.8fr) auto;
   margin: 26px 0 18px;
   padding: 22px;
 }

@@ -15,6 +15,7 @@ from api.services.job_ingestion import (
 )
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+JOBS_CH_PAGES_PER_RUN = 5
 
 #@router.get("health")
 #def health(x):
@@ -37,14 +38,14 @@ def scrape_jobs_ch(
         source_name=scraper.source_name,
         search_term=request.search_term,
         location=request.location,
-        pages=request.pages,
+        pages=JOBS_CH_PAGES_PER_RUN,
     )
 
     try:
         normalized_jobs = scraper.scrape(
             search_term=request.search_term,
             location=request.location,
-            pages=request.pages,
+            pages=JOBS_CH_PAGES_PER_RUN,
         )
         created, updated = upsert_jobs(normalized_jobs)
         return finish_scrape_run(

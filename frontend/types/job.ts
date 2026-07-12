@@ -19,7 +19,6 @@ export type Job = {
 export type JobScrapeRequest = {
   search_term?: string;
   location?: string;
-  pages: number;
 };
 
 export type ScrapeRun = {

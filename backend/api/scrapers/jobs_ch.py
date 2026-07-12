@@ -15,6 +15,19 @@ from api.scrapers.base import BaseJobScraper
 
 logger = logging.getLogger(__name__)
 
+LOCATION_ALIASES = {
+    "zurigo": "Zürich",
+    "zurich": "Zürich",
+    "ginevra": "Genève",
+    "geneva": "Genève",
+    "basilea": "Basel",
+    "bale": "Basel",
+    "berna": "Bern",
+    "lucerna": "Luzern",
+    "lausanne": "Lausanne",
+    "losanna": "Lausanne",
+}
+
 
 # Job scraper, sub class of BaseJobScraper, useds to scrape jobs.ch website
 class JobsChScraper(BaseJobScraper):
@@ -77,7 +90,8 @@ class JobsChScraper(BaseJobScraper):
         if search_term:
             params.append(f"term={requests.utils.quote(search_term)}")
         if location:
-            params.append(f"location={requests.utils.quote(location)}")
+            normalized_location = LOCATION_ALIASES.get(location.strip().casefold(), location)
+            params.append(f"location={requests.utils.quote(normalized_location)}")
         if page > 1:
             params.append(f"page={page}")
         query = "&".join(params)
@@ -232,9 +246,11 @@ class JobsChScraper(BaseJobScraper):
             return None
         return str(value)
 
-    def _strip_html(self, value: str | None) -> str | None:
+    def _strip_html(self, value: str | list | None) -> str | None:
         if not value:
             return None
+        if isinstance(value, list):
+            value = " ".join(str(item) for item in value if item)
         return _beautiful_soup(value).get_text(" ", strip=True)
 
     def _text_or_none(self, node) -> str | None:

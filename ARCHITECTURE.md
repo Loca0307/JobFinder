@@ -57,7 +57,10 @@
 ## jobs.ch Search Form
 
 - The dashboard's primary search bar is exclusively a jobs.ch scrape launcher. Typing does not filter or otherwise modify the stored job list.
-- `frontend/app/page.tsx` sends the search term, location, and one-to-five-page limit when the form is submitted or Enter is pressed. It displays progress, reports the run's found/created/updated counts, and refreshes the stored job list after success.
+- `frontend/app/page.tsx` sends only the search term and location when the form is submitted or Enter is pressed. The backend always scrapes five pages, records that fixed count in the scrape run, and does not expose page selection in the public request schema. The UI displays progress, reports the run's found/created/updated counts, and refreshes the stored job list after success.
 - A separate, explicitly labeled local-filter panel narrows stored jobs by keywords and location without making a scraper request. Its filters can be cleared independently and the dashboard shows both stored and currently visible counts.
 - `frontend/lib/jobs.ts` sends the form as JSON to `POST /jobs/scrape/jobs-ch` and converts unsuccessful API responses into user-visible errors. Both listing and scraping use `NEXT_PUBLIC_API_BASE_URL`, with local port `8000` as the fallback.
 - `frontend/types/job.ts` mirrors the scrape request and scrape-run response schemas so the UI-to-API flow remains type-safe.
+- jobs.ch JSON-LD requirements may be either text or a list; the scraper flattens both forms before HTML removal so valid specialist jobs are not discarded during normalization.
+- Before constructing a jobs.ch listing URL, the scraper normalizes common English, Italian, and French Swiss-city exonyms (for example, `zurigo` and `Zurich`) to the location names indexed by jobs.ch (`Zürich`). The scrape-run record retains the user's original location input.
+- Stored-job listing paginates through the DynamoDB scan, orders the complete result by update time, and only then applies the requested UI limit. This prevents DynamoDB's arbitrary scan order from hiding newly ingested jobs.

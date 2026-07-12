@@ -29,7 +29,6 @@ export default function Home() {
   const [filterLocation, setFilterLocation] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scrapePages, setScrapePages] = useState(1);
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeError, setScrapeError] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<ScrapeRun | null>(null);
@@ -61,8 +60,7 @@ export default function Home() {
     try {
       const run = await scrapeJobsCh({
         search_term: query.trim() || undefined,
-        location: location.trim() || undefined,
-        pages: scrapePages
+        location: location.trim() || undefined
       });
       setLastRun(run);
       await loadJobs();
@@ -148,24 +146,13 @@ export default function Home() {
             maxLength={255}
           />
         </label>
-        <label>
-          Pages
-          <select
-            value={scrapePages}
-            onChange={(event) => setScrapePages(Number(event.target.value))}
-          >
-            {[1, 2, 3, 4, 5].map((page) => (
-              <option key={page} value={page}>{page}</option>
-            ))}
-          </select>
-        </label>
         <button type="submit" disabled={isScraping}>
           {isScraping ? "Scraping jobs.ch…" : "Search jobs.ch"}
         </button>
         {scrapeError ? <p className="scrapeMessage error">{scrapeError}</p> : null}
         {lastRun ? (
           <p className="scrapeMessage success" role="status">
-            Scrape complete: {lastRun.jobs_found} found, {lastRun.jobs_created} new and{" "}
+            Five-page scrape complete: {lastRun.jobs_found} found, {lastRun.jobs_created} new and{" "}
             {lastRun.jobs_updated} updated. Results have been refreshed below.
           </p>
         ) : null}

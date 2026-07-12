@@ -11,3 +11,4 @@ lib/
 !frontend/lib/
 !frontend/lib/**
 node_modules/
+out/
