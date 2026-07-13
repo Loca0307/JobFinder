@@ -19,9 +19,6 @@ from api.services.job_ingestion import (
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 JOBS_CH_PAGES_PER_RUN = 5
 
-#@router.get("health")
-#def health(x):
-    
 
 
 @router.get("/count")

@@ -6,7 +6,7 @@
 - Database: DynamoDB through boto3
 - Scraping: Requests and BeautifulSoup
 - Frontend: Next.js, React, TypeScript, Tailwind CSS 4 with PostCSS
-- Deployment: Docker Compose
+- Deployment: Docker Compose, Terraform, AWS Lambda (Python 3.11)
 - Existing AI dependencies: LangGraph, LangChain OpenAI
 
 ## jobs.ch Job Scraping Foundation
