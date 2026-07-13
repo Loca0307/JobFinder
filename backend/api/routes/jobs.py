@@ -26,6 +26,7 @@ def get_job_count() -> dict[str, int]:
     return {"count": count_jobs()}
 
 
+
 @router.get("", response_model=List[JobRead])
 def list_jobs(
     limit: int = 50,
