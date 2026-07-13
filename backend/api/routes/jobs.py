@@ -21,6 +21,7 @@ JOBS_CH_PAGES_PER_RUN = 5
 
 
 
+
 @router.get("/count")
 def get_job_count() -> dict[str, int]:
     return {"count": count_jobs()}
