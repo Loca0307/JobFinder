@@ -9,6 +9,13 @@
 - Deployment: Docker Compose, Terraform, AWS Lambda (Python 3.11)
 - Existing AI dependencies: LangGraph, LangChain OpenAI
 
+## Lambda Code Deployment Workflow
+
+- `.github/workflows/update-lambda.yaml` deploys backend-only changes pushed to `main` and also supports manual runs.
+- The workflow builds a Python 3.11 ZIP from `backend/main.py`, `backend/api/`, and `backend/requirements.txt`, matching the Lambda runtime managed in `tf/lambda.tf`, then updates the existing `JobFinder-fastapi` function.
+- GitHub Actions authenticates with short-lived AWS credentials through OIDC using the `AWS_DEPLOY_ROLE_ARN` repository secret. `tf/github_actions.tf` provisions the repository-and-branch-scoped OIDC trust plus a role limited to updating and reading the existing Lambda function.
+- Terraform remains the source of truth for infrastructure and Lambda configuration. It is applied separately because this repository currently uses local Terraform state; the workflow changes Lambda code only.
+
 ## jobs.ch Job Scraping Foundation
 
 - The first scraping source is `jobs.ch`, a JobCloud platform and one of Switzerland's main job boards.
