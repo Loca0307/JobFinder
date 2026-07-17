@@ -16,6 +16,14 @@
 - GitHub Actions authenticates with short-lived AWS credentials through OIDC using the `AWS_DEPLOY_ROLE_ARN` repository secret. `tf/github_actions.tf` provisions the repository-and-branch-scoped OIDC trust plus a role limited to updating and reading the existing Lambda function.
 - Terraform remains the source of truth for infrastructure and Lambda configuration. It is applied separately because this repository currently uses local Terraform state; the workflow changes Lambda code only.
 
+## Frontend Deployment Workflow
+
+- `.github/workflows/update-frontend.yaml` deploys frontend changes pushed to `main` and supports manual runs.
+- GitHub Actions installs the locked frontend dependencies with Node.js 22 and runs the Next.js static export with `NEXT_PUBLIC_API_BASE_URL` supplied by a repository variable.
+- The generated `frontend/out/` contents are synchronized to the private `job-finder-static` bucket under `out/`, matching the CloudFront origin path, and obsolete objects are deleted.
+- After upload, the workflow invalidates `/*` on CloudFront distribution `E2U4YDALK1V35D` so the new static assets are served immediately.
+- `tf/github_actions.tf` grants the existing repository-scoped OIDC role access only to the frontend bucket objects, bucket listing, and this distribution's invalidations.
+
 ## jobs.ch Job Scraping Foundation
 
 - The first scraping source is `jobs.ch`, a JobCloud platform and one of Switzerland's main job boards.
