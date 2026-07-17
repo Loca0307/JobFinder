@@ -18,6 +18,8 @@ from api.data.schemas import NormalizedJob
 from api.services.location_normalization import normalize_location
 
 
+# ------- This file is responsible of taking the data retrieved from the scrapers and store it in the database -------
+
 def get_jobs_table():
     settings = get_settings()
     dynamodb = boto3.resource(

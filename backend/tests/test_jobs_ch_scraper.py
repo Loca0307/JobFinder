@@ -1,7 +1,7 @@
 import json
 import threading
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import requests
 
@@ -122,11 +122,11 @@ class JobsChScraperTests(unittest.TestCase):
         </html>
         """
         response.raise_for_status.return_value = None
-        session = Mock()
-        session.get.return_value = response
+        client = Mock()
+        client.get.return_value = response
 
         job = self.scraper._scrape_detail(
-            "https://www.jobs.ch/en/vacancies/detail/fallback/", session
+            "https://www.jobs.ch/en/vacancies/detail/fallback/", client
         )
 
         self.assertIsNotNone(job)
@@ -140,12 +140,13 @@ class JobsChScraperTests(unittest.TestCase):
         listing_response = Mock()
         listing_response.text = "<html></html>"
         listing_response.raise_for_status.return_value = None
-        session = Mock()
-        session.get.return_value = listing_response
+        client = MagicMock()
+        client.__enter__.return_value = client
+        client.get.return_value = listing_response
 
         first_job = Mock()
         with (
-            patch.object(self.scraper, "_create_session", return_value=session),
+            patch.object(self.scraper, "_create_http_client", return_value=client),
             patch.object(
                 self.scraper,
                 "_extract_detail_urls",
@@ -165,15 +166,15 @@ class JobsChScraperTests(unittest.TestCase):
         self.assertEqual(page, 2)
         self.assertEqual(jobs, [first_job])
         self.assertEqual(scrape_detail.call_count, 2)
-        self.assertTrue(all(call.args[1] is session for call in scrape_detail.call_args_list))
+        self.assertTrue(all(call.args[1] is client for call in scrape_detail.call_args_list))
+        client.__exit__.assert_called_once()
 
     def test_scrape_page_returns_empty_result_after_listing_failure(self):
-        failed_response = Mock()
-        failed_response.raise_for_status.side_effect = requests.HTTPError("503")
-        session = Mock()
-        session.get.return_value = failed_response
+        client = MagicMock()
+        client.__enter__.return_value = client
+        client.get.side_effect = requests.HTTPError("503")
 
-        with patch.object(self.scraper, "_create_session", return_value=session):
+        with patch.object(self.scraper, "_create_http_client", return_value=client):
             page, jobs = self.scraper._scrape_page(None, None, 4)
 
         self.assertEqual(page, 4)
@@ -224,17 +225,14 @@ class JobsChScraperTests(unittest.TestCase):
 
         self.assertEqual(jobs, [surviving_job])
 
-    def test_each_created_session_is_independent_and_has_scraper_headers(self):
-        first = self.scraper._create_session()
-        second = self.scraper._create_session()
+    def test_each_created_http_client_is_independent(self):
+        first = self.scraper._create_http_client()
+        second = self.scraper._create_http_client()
 
         self.assertIsNot(first, second)
-        self.assertEqual(
-            first.headers["User-Agent"], self.scraper.headers["User-Agent"]
-        )
-        self.assertEqual(
-            second.headers["Accept-Language"], self.scraper.headers["Accept-Language"]
-        )
+        self.assertIsNot(first.session, second.session)
+        first.close()
+        second.close()
 
 
 if __name__ == "__main__":

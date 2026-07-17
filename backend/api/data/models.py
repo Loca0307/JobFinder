@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 from api.data.schemas import NormalizedJob
 
-# ----- Helper methods for data setting -----
+# -------- Helper methods for data setting --------
 
 def utc_now_iso() -> str:
     return datetime.now().isoformat() + "Z"

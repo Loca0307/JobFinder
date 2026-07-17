@@ -13,6 +13,7 @@ import requests
 from api.settings.config import get_settings
 from api.data.schemas import NormalizedJob
 from api.scrapers.base import BaseJobScraper
+from api.scrapers.http import ScraperHttpClient, ScraperHttpConfig
 from api.services.job_attribute_extraction import (
     extract_remote_type,
     extract_required_languages,
@@ -31,16 +32,16 @@ class JobsChScraper(BaseJobScraper):
 
     def __init__(self) -> None:
         settings = get_settings() # Loads setting configuration for specific scraper
-        self.headers = {
-            "User-Agent": settings.scraper_user_agent,
-            "Accept-Language": "en,de-CH;q=0.9,fr-CH;q=0.8,it-CH;q=0.7",
-        }
-        self.timeout = settings.scraper_timeout_seconds
+        self.http_config = ScraperHttpConfig(
+            user_agent=settings.scraper_user_agent,
+            connect_timeout=settings.scraper_connect_timeout_seconds,
+            read_timeout=settings.scraper_read_timeout_seconds,
+            max_retries=settings.scraper_max_retries,
+            backoff_factor=settings.scraper_retry_backoff_factor,
+        )
 
-    def _create_session(self) -> requests.Session:
-        session = requests.Session()
-        session.headers.update(self.headers)
-        return session
+    def _create_http_client(self) -> ScraperHttpClient:
+        return ScraperHttpClient(self.http_config)
 
     def scrape(
         self,
@@ -53,6 +54,8 @@ class JobsChScraper(BaseJobScraper):
 
         page_results: dict[int, list[NormalizedJob]] = {}
 
+
+        # Multi thread for the 5 retrieved pages
         with ThreadPoolExecutor(max_workers=min(5, pages)) as executor:
 
             # Compacted version
@@ -98,30 +101,33 @@ class JobsChScraper(BaseJobScraper):
         page: int,
     ) -> tuple[int, list[NormalizedJob]]:
         jobs: list[NormalizedJob] = []
-        session = self._create_session()
         listing_url = self._build_listing_url(search_term, location, page)
 
-        try:
-            response = session.get(listing_url, timeout=self.timeout)
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            logger.warning("jobs.ch listing page %s request failed: %s", page, exc)
-            return page, jobs
-
-        detail_urls = self._extract_detail_urls(response.text)
-        for detail_url in detail_urls:
+        with self._create_http_client() as client:
             try:
-                job = self._scrape_detail(detail_url, session)
-            except Exception:
-                logger.exception(
-                    "jobs.ch detail scrape failed on page %s for %s",
+                response = client.get(listing_url)
+            except requests.RequestException as exc:
+                logger.warning(
+                    "jobs.ch listing page %s request failed after retries: %s",
                     page,
-                    detail_url,
+                    exc,
                 )
-                continue
+                return page, jobs
 
-            if job is not None:
-                jobs.append(job)
+            detail_urls = self._extract_detail_urls(response.text)
+            for detail_url in detail_urls:
+                try:
+                    job = self._scrape_detail(detail_url, client)
+                except Exception:
+                    logger.exception(
+                        "jobs.ch detail scrape failed on page %s for %s",
+                        page,
+                        detail_url,
+                    )
+                    continue
+
+                if job is not None:
+                    jobs.append(job)
 
         return page, jobs
 
@@ -178,10 +184,9 @@ class JobsChScraper(BaseJobScraper):
 
     # Extract a single normalizesJob from the url
     def _scrape_detail(
-        self, url: str, session: requests.Session
+        self, url: str, client: ScraperHttpClient
     ) -> NormalizedJob | None:
-        response = session.get(url, timeout=self.timeout)
-        response.raise_for_status()
+        response = client.get(url)
         soup = _beautiful_soup(response.text)
         payload = self._extract_job_posting_json(soup)
 

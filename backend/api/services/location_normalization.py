@@ -4,7 +4,6 @@ LOCATION_ALIASES = {
     "ginevra": "Genève",
     "geneva": "Genève",
     "basilea": "Basel",
-    "bale": "Basel",
     "berna": "Bern",
     "lucerna": "Luzern",
     "lausanne": "Lausanne",

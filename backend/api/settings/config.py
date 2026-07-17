@@ -18,6 +18,18 @@ class Settings(BaseSettings):
         alias="SCRAPER_USER_AGENT",
     )
     scraper_timeout_seconds: int = Field(default=20, alias="SCRAPER_TIMEOUT_SECONDS")
+    scraper_connect_timeout_seconds: float = Field(
+        default=5, ge=0.1, alias="SCRAPER_CONNECT_TIMEOUT_SECONDS"
+    )
+    scraper_read_timeout_seconds: float = Field(
+        default=15, ge=0.1, alias="SCRAPER_READ_TIMEOUT_SECONDS"
+    )
+    scraper_max_retries: int = Field(
+        default=3, ge=0, alias="SCRAPER_MAX_RETRIES"
+    )
+    scraper_retry_backoff_factor: float = Field(
+        default=1, ge=0, alias="SCRAPER_RETRY_BACKOFF_FACTOR"
+    )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

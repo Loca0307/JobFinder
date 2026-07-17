@@ -13,5 +13,6 @@ botocore
 
 # Web scraping
 requests
+urllib3
 beautifulsoup4
 bs4

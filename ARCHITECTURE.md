@@ -4,7 +4,7 @@
 
 - Backend: Python, FastAPI, Pydantic
 - Database: DynamoDB through boto3
-- Scraping: Requests and BeautifulSoup
+- Scraping: Requests, urllib3 retry policies, and BeautifulSoup
 - Frontend: Next.js, React, TypeScript, Tailwind CSS 4 with PostCSS
 - Deployment: Docker Compose, Terraform, AWS Lambda (Python 3.11)
 - Existing AI dependencies: LangGraph, LangChain OpenAI
@@ -30,6 +30,7 @@
 - Scrapers are independent classes under `backend/api/scrapers/` and return normalized `NormalizedJob` objects instead of writing directly to the database.
 - `backend/api/scrapers/jobs_ch.py` builds jobs.ch listing URLs, extracts detail-page URLs, then parses schema.org `JobPosting` JSON-LD when present. It falls back to basic HTML extraction if no JSON-LD is available.
 - A jobs.ch run uses a bounded `ThreadPoolExecutor` with up to five workers, one per requested listing page. Each worker owns its own reusable `requests.Session`, fetches its listing page, and processes that page's job details sequentially. The coordinator isolates page-worker failures, waits for all workers, restores page order, and deduplicates jobs by source URL before persistence.
+- `backend/api/scrapers/http.py` provides the shared scraper HTTP layer. `ScraperHttpConfig` carries headers, separate connection/read timeouts, retry counts, backoff, and retryable status codes. `ScraperHttpClient` installs the same retry-enabled adapter for HTTP and HTTPS, respects `Retry-After`, raises final HTTP errors, and closes its session through a context manager. Every jobs.ch page worker creates its own client, safely reusing one connection pool for that page's listing and detail requests without sharing a session between threads.
 - `backend/api/data/schemas.py` defines the normalized job contract used between scraper, ingestion service, and API.
 - `backend/api/data/models.py` defines plain DynamoDB item builders:
   - `SOURCE#<source>` items store configured job boards such as jobs.ch.
@@ -39,6 +40,7 @@
 - `backend/api/services/job_attribute_extraction.py` uses deterministic multilingual patterns to derive normalized seniority, required languages, and remote type from each job's title and description. The jobs.ch JSON-LD and HTML-fallback flows call it before constructing `NormalizedJob`; title terms take priority over description matches, languages are deduplicated into canonical English names, and remote arrangements use `remote`, `hybrid`, or `on_site`. Structured schema.org `jobLocationType` is preferred when present, while contextual patterns distinguish working arrangements from terms such as hybrid cloud.
 - The ingestion content hash includes extracted seniority, remote type, and required languages, ensuring a repeat scrape updates older DynamoDB jobs when attribute-extraction rules add or change normalized values.
 - `backend/tests/test_jobs_ch_scraper.py` exercises the scraper without live network access. It covers listing URL construction and location normalization, multilingual detail-link extraction, malformed JSON-LD handling, structured field normalization, the HTML fallback, simultaneous execution of five page workers, independent worker sessions, deterministic cross-page deduplication, and isolation of listing, detail, and worker failures.
+- `backend/tests/test_scraper_http.py` verifies shared headers, HTTP/HTTPS retry adapter configuration, retryable statuses, `Retry-After` support, connect/read timeout forwarding, HTTP status checking, and context-managed session cleanup without making live network requests.
 - `backend/tests/test_scraper_concurrency_performance.py` compares five simulated slow page operations sequentially and through the real scraper coordinator. It uses deterministic local delays rather than live network timing and requires the five-worker execution to complete in less than 60% of the sequential duration.
 - `backend/api/routes/jobs.py` exposes:
   - `GET /jobs` to list stored jobs.
