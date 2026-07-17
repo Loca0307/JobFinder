@@ -35,6 +35,8 @@
   - `JOB#<source>#<source-url-hash>` items store normalized job offers with title, company, location, description, requirements, employment type, salary, language list, source URL, apply URL, posting date, scrape timestamp, raw payload, and content hash.
   - `SCRAPE_RUN#<uuid>` items record each run, its filters, status, counts, and errors.
 - `backend/api/services/job_ingestion.py` owns DynamoDB ingestion through boto3. It creates source items, starts and finishes scrape runs, computes content hashes, and deduplicates jobs by deterministic source URL keys.
+- `backend/api/services/job_attribute_extraction.py` uses deterministic multilingual patterns to derive normalized seniority, required languages, and remote type from each job's title and description. The jobs.ch JSON-LD and HTML-fallback flows call it before constructing `NormalizedJob`; title terms take priority over description matches, languages are deduplicated into canonical English names, and remote arrangements use `remote`, `hybrid`, or `on_site`. Structured schema.org `jobLocationType` is preferred when present, while contextual patterns distinguish working arrangements from terms such as hybrid cloud.
+- The ingestion content hash includes extracted seniority, remote type, and required languages, ensuring a repeat scrape updates older DynamoDB jobs when attribute-extraction rules add or change normalized values.
 - `backend/api/routes/jobs.py` exposes:
   - `GET /jobs` to list stored jobs.
   - `GET /jobs/health` as a jobs router smoke test.
@@ -65,7 +67,7 @@
 - The frontend lives in `frontend/` and uses Next.js with React and TypeScript.
 - `frontend/app/page.tsx` is the initial jobs dashboard. It fetches stored jobs from the backend `GET /jobs` endpoint, keeps filtering client-side, and shows a selected-job detail pane.
 - `frontend/lib/jobs.ts` owns the API call and reads `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000` for local development.
-- `frontend/types/job.ts` mirrors the `JobRead` response from `backend/api/data/schemas.py`.
+- `frontend/types/job.ts` mirrors the public `JobRead` response from `backend/api/data/schemas.py`; salary is omitted from both database-search responses and the frontend because the current job sources do not reliably provide it.
 - `backend/api/data/schemas.py` now includes source website, source URL, and required languages in `JobRead` so the UI can display where each scraped job came from.
 - `docker-compose.yaml` includes a `frontend` service on port `3000`. The browser talks to the FastAPI backend on `http://localhost:8000`, and the backend continues to read jobs from DynamoDB.
 

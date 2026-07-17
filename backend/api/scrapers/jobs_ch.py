@@ -12,6 +12,12 @@ import requests
 from api.settings.config import get_settings
 from api.data.schemas import NormalizedJob
 from api.scrapers.base import BaseJobScraper
+from api.services.job_attribute_extraction import (
+    extract_remote_type,
+    extract_required_languages,
+    extract_seniority,
+    normalize_structured_remote_type,
+)
 from api.services.location_normalization import normalize_location
 
 logger = logging.getLogger(__name__)
@@ -129,6 +135,9 @@ class JobsChScraper(BaseJobScraper):
             company=None,
             location=None,
             description=description,
+            seniority=extract_seniority(title, description),
+            remote_type=extract_remote_type(title, description),
+            required_languages=extract_required_languages(title, description),
             source_website=self.source_name,
             source_url=url,
             apply_url=url,
@@ -154,17 +163,25 @@ class JobsChScraper(BaseJobScraper):
         organization = payload.get("hiringOrganization") or {}
         location = payload.get("jobLocation")
         salary = payload.get("baseSalary")
+        title = payload.get("title") or "Untitled job"
+        description = self._strip_html(payload.get("description"))
 
         return NormalizedJob(
-            title=payload.get("title") or "Untitled job",
+            title=title,
             company=self._organization_name(organization),
             location=self._location_name(location),
-            description=self._strip_html(payload.get("description")),
+            description=description,
             requirements=self._strip_html(
                 payload.get("qualifications") or payload.get("skills")
             ),
+            seniority=extract_seniority(title, description),
             employment_type=self._join_value(payload.get("employmentType")),
+            remote_type=normalize_structured_remote_type(
+                payload.get("jobLocationType")
+            )
+            or extract_remote_type(title, description),
             salary=self._salary_text(salary),
+            required_languages=extract_required_languages(title, description),
             source_website=self.source_name,
             source_url=url,
             apply_url=payload.get("url") or url,

@@ -37,7 +37,6 @@ export function JobDetails({ job }: { job: Job | null }) {
             <Fact label="Seniority" value={valueOrFallback(job.seniority)} />
             <Fact label="Type" value={valueOrFallback(job.employment_type)} />
             <Fact label="Remote" value={valueOrFallback(job.remote_type)} />
-            <Fact label="Salary" value={valueOrFallback(job.salary)} />
             <Fact label="Languages" value={job.required_languages?.join(", ") || "Not specified"} />
           </dl>
           <TextSection title="Description" text={valueOrFallback(job.description)} />

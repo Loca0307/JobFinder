@@ -181,8 +181,11 @@ def _job_hash(job: NormalizedJob) -> str:
             job.location or "",
             job.description or "",
             job.requirements or "",
+            job.seniority or "",
             job.employment_type or "",
+            job.remote_type or "",
             job.salary or "",
+            ",".join(job.required_languages),
         ]
     )
     return hashlib.sha256(content.encode("utf-8")).hexdigest()

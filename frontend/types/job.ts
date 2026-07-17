@@ -8,7 +8,6 @@ export type Job = {
   seniority?: string | null;
   employment_type?: string | null;
   remote_type?: string | null;
-  salary?: string | null;
   required_languages?: string[];
   source_website?: string | null;
   source_url?: string | null;
