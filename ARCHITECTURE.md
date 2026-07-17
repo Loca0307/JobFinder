@@ -29,6 +29,7 @@
 - The first scraping source is `jobs.ch`, a JobCloud platform and one of Switzerland's main job boards.
 - Scrapers are independent classes under `backend/api/scrapers/` and return normalized `NormalizedJob` objects instead of writing directly to the database.
 - `backend/api/scrapers/jobs_ch.py` builds jobs.ch listing URLs, extracts detail-page URLs, then parses schema.org `JobPosting` JSON-LD when present. It falls back to basic HTML extraction if no JSON-LD is available.
+- A jobs.ch run uses a bounded `ThreadPoolExecutor` with up to five workers, one per requested listing page. Each worker owns its own reusable `requests.Session`, fetches its listing page, and processes that page's job details sequentially. The coordinator isolates page-worker failures, waits for all workers, restores page order, and deduplicates jobs by source URL before persistence.
 - `backend/api/data/schemas.py` defines the normalized job contract used between scraper, ingestion service, and API.
 - `backend/api/data/models.py` defines plain DynamoDB item builders:
   - `SOURCE#<source>` items store configured job boards such as jobs.ch.
@@ -37,7 +38,7 @@
 - `backend/api/services/job_ingestion.py` owns DynamoDB ingestion through boto3. It creates source items, starts and finishes scrape runs, computes content hashes, and deduplicates jobs by deterministic source URL keys.
 - `backend/api/services/job_attribute_extraction.py` uses deterministic multilingual patterns to derive normalized seniority, required languages, and remote type from each job's title and description. The jobs.ch JSON-LD and HTML-fallback flows call it before constructing `NormalizedJob`; title terms take priority over description matches, languages are deduplicated into canonical English names, and remote arrangements use `remote`, `hybrid`, or `on_site`. Structured schema.org `jobLocationType` is preferred when present, while contextual patterns distinguish working arrangements from terms such as hybrid cloud.
 - The ingestion content hash includes extracted seniority, remote type, and required languages, ensuring a repeat scrape updates older DynamoDB jobs when attribute-extraction rules add or change normalized values.
-- `backend/tests/test_jobs_ch_scraper.py` exercises the scraper without live network access. It covers listing URL construction and location normalization, multilingual detail-link extraction and deduplication, malformed JSON-LD handling, structured field normalization, the HTML fallback, cross-page deduplication, and isolation of listing/detail request failures.
+- `backend/tests/test_jobs_ch_scraper.py` exercises the scraper without live network access. It covers listing URL construction and location normalization, multilingual detail-link extraction, malformed JSON-LD handling, structured field normalization, the HTML fallback, simultaneous execution of five page workers, independent worker sessions, deterministic cross-page deduplication, and isolation of listing, detail, and worker failures.
 - `backend/api/routes/jobs.py` exposes:
   - `GET /jobs` to list stored jobs.
   - `GET /jobs/health` as a jobs router smoke test.

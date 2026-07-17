@@ -1,4 +1,5 @@
 import json
+import threading
 import unittest
 from unittest.mock import Mock, patch
 
@@ -121,10 +122,11 @@ class JobsChScraperTests(unittest.TestCase):
         </html>
         """
         response.raise_for_status.return_value = None
-        self.scraper.session.get = Mock(return_value=response)
+        session = Mock()
+        session.get.return_value = response
 
         job = self.scraper._scrape_detail(
-            "https://www.jobs.ch/en/vacancies/detail/fallback/"
+            "https://www.jobs.ch/en/vacancies/detail/fallback/", session
         )
 
         self.assertIsNotNone(job)
@@ -134,57 +136,105 @@ class JobsChScraperTests(unittest.TestCase):
         self.assertEqual(job.required_languages, ["English"])
         self.assertEqual(job.raw_payload, {"parser": "html_fallback"})
 
-    def test_scrape_deduplicates_across_pages_and_isolates_detail_failures(self):
+    def test_scrape_page_isolates_detail_failures(self):
         listing_response = Mock()
         listing_response.text = "<html></html>"
         listing_response.raise_for_status.return_value = None
-        self.scraper.session.get = Mock(return_value=listing_response)
+        session = Mock()
+        session.get.return_value = listing_response
 
         first_job = Mock()
         with (
+            patch.object(self.scraper, "_create_session", return_value=session),
             patch.object(
                 self.scraper,
                 "_extract_detail_urls",
-                side_effect=[
-                    ["https://example.test/job/1", "https://example.test/job/2"],
-                    ["https://example.test/job/1", "https://example.test/job/3"],
+                return_value=[
+                    "https://example.test/job/1",
+                    "https://example.test/job/2",
                 ],
             ),
             patch.object(
                 self.scraper,
                 "_scrape_detail",
-                side_effect=[first_job, requests.Timeout("slow detail"), None],
+                side_effect=[first_job, requests.Timeout("slow detail")],
             ) as scrape_detail,
         ):
-            jobs = self.scraper.scrape(pages=2)
+            page, jobs = self.scraper._scrape_page(None, None, 2)
 
+        self.assertEqual(page, 2)
         self.assertEqual(jobs, [first_job])
-        self.assertEqual(
-            [call.args[0] for call in scrape_detail.call_args_list],
-            [
-                "https://example.test/job/1",
-                "https://example.test/job/2",
-                "https://example.test/job/3",
-            ],
-        )
+        self.assertEqual(scrape_detail.call_count, 2)
+        self.assertTrue(all(call.args[1] is session for call in scrape_detail.call_args_list))
 
-    def test_scrape_continues_after_a_listing_request_failure(self):
+    def test_scrape_page_returns_empty_result_after_listing_failure(self):
         failed_response = Mock()
         failed_response.raise_for_status.side_effect = requests.HTTPError("503")
-        successful_response = Mock()
-        successful_response.text = "<html></html>"
-        successful_response.raise_for_status.return_value = None
-        self.scraper.session.get = Mock(
-            side_effect=[failed_response, successful_response]
-        )
+        session = Mock()
+        session.get.return_value = failed_response
 
-        with patch.object(
-            self.scraper, "_extract_detail_urls", return_value=[]
-        ) as extract_urls:
-            jobs = self.scraper.scrape(pages=2)
+        with patch.object(self.scraper, "_create_session", return_value=session):
+            page, jobs = self.scraper._scrape_page(None, None, 4)
+
+        self.assertEqual(page, 4)
+        self.assertEqual(jobs, [])
+
+    def test_scrape_runs_five_pages_concurrently(self):
+        barrier = threading.Barrier(5, timeout=2)
+        visited_pages: list[int] = []
+        visited_lock = threading.Lock()
+
+        def scrape_page(search_term, location, page):
+            with visited_lock:
+                visited_pages.append(page)
+            barrier.wait()
+            return page, []
+
+        with patch.object(self.scraper, "_scrape_page", side_effect=scrape_page):
+            jobs = self.scraper.scrape("python", "Zürich", pages=5)
 
         self.assertEqual(jobs, [])
-        extract_urls.assert_called_once_with("<html></html>")
+        self.assertEqual(sorted(visited_pages), [1, 2, 3, 4, 5])
+
+    def test_scrape_merges_in_page_order_and_deduplicates_across_pages(self):
+        first = Mock(source_url="https://example.test/job/1")
+        duplicate = Mock(source_url="https://example.test/job/1")
+        second = Mock(source_url="https://example.test/job/2")
+
+        def scrape_page(search_term, location, page):
+            if page == 1:
+                return 1, [first]
+            return 2, [duplicate, second]
+
+        with patch.object(self.scraper, "_scrape_page", side_effect=scrape_page):
+            jobs = self.scraper.scrape(pages=2)
+
+        self.assertEqual(jobs, [first, second])
+
+    def test_scrape_isolates_unexpected_page_worker_failure(self):
+        surviving_job = Mock(source_url="https://example.test/job/survives")
+
+        def scrape_page(search_term, location, page):
+            if page == 1:
+                raise RuntimeError("worker crashed")
+            return page, [surviving_job]
+
+        with patch.object(self.scraper, "_scrape_page", side_effect=scrape_page):
+            jobs = self.scraper.scrape(pages=2)
+
+        self.assertEqual(jobs, [surviving_job])
+
+    def test_each_created_session_is_independent_and_has_scraper_headers(self):
+        first = self.scraper._create_session()
+        second = self.scraper._create_session()
+
+        self.assertIsNot(first, second)
+        self.assertEqual(
+            first.headers["User-Agent"], self.scraper.headers["User-Agent"]
+        )
+        self.assertEqual(
+            second.headers["Accept-Language"], self.scraper.headers["Accept-Language"]
+        )
 
 
 if __name__ == "__main__":

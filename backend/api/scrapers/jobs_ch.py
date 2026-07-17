@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 from urllib.parse import urljoin
@@ -30,14 +31,16 @@ class JobsChScraper(BaseJobScraper):
 
     def __init__(self) -> None:
         settings = get_settings() # Loads setting configuration for specific scraper
-        self.session = requests.Session() # Creates session wiht the website to use efficiently more requests per session
-        self.session.headers.update(
-            {
-                "User-Agent": settings.scraper_user_agent,
-                "Accept-Language": "en,de-CH;q=0.9,fr-CH;q=0.8,it-CH;q=0.7",
-            }
-        )
+        self.headers = {
+            "User-Agent": settings.scraper_user_agent,
+            "Accept-Language": "en,de-CH;q=0.9,fr-CH;q=0.8,it-CH;q=0.7",
+        }
         self.timeout = settings.scraper_timeout_seconds
+
+    def _create_session(self) -> requests.Session:
+        session = requests.Session()
+        session.headers.update(self.headers)
+        return session
 
     def scrape(
         self,
@@ -45,34 +48,79 @@ class JobsChScraper(BaseJobScraper):
         location: str | None = None,
         pages: int = 1,
     ) -> list[NormalizedJob]:
+        if pages < 1:
+            return []
+
+        page_results: dict[int, list[NormalizedJob]] = {}
+
+        with ThreadPoolExecutor(max_workers=min(5, pages)) as executor:
+            futures = {
+                executor.submit(
+                    self._scrape_page, search_term, location, page
+                ): page
+                for page in range(1, pages + 1)
+            }
+
+            for future in as_completed(futures):
+                page = futures[future]
+                try:
+                    result_page, jobs = future.result()
+                    page_results[result_page] = jobs
+                except Exception:
+                    logger.exception(
+                        "Unexpected jobs.ch page worker failure for page %s", page
+                    )
+                    page_results[page] = []
+
+        return self._merge_page_results(page_results)
+
+    def _scrape_page(
+        self,
+        search_term: str | None,
+        location: str | None,
+        page: int,
+    ) -> tuple[int, list[NormalizedJob]]:
+        jobs: list[NormalizedJob] = []
+        session = self._create_session()
+        listing_url = self._build_listing_url(search_term, location, page)
+
+        try:
+            response = session.get(listing_url, timeout=self.timeout)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            logger.warning("jobs.ch listing page %s request failed: %s", page, exc)
+            return page, jobs
+
+        detail_urls = self._extract_detail_urls(response.text)
+        for detail_url in detail_urls:
+            try:
+                job = self._scrape_detail(detail_url, session)
+            except Exception:
+                logger.exception(
+                    "jobs.ch detail scrape failed on page %s for %s",
+                    page,
+                    detail_url,
+                )
+                continue
+
+            if job is not None:
+                jobs.append(job)
+
+        return page, jobs
+
+    def _merge_page_results(
+        self, page_results: dict[int, list[NormalizedJob]]
+    ) -> list[NormalizedJob]:
         jobs: list[NormalizedJob] = []
         seen_urls: set[str] = set()
 
-        for page in range(1, pages + 1):
-            listing_url = self._build_listing_url(search_term, location, page)
-            try:
-                # Sends the actual request for the data
-                response = self.session.get(listing_url, timeout=self.timeout)
-                response.raise_for_status()
-            except requests.RequestException as exc:
-                logger.warning("jobs.ch listing request failed: %s", exc)
-                continue
-
-            detail_urls = self._extract_detail_urls(response.text)
-            
-            for detail_url in detail_urls: # Checks for url duplication
-                if detail_url in seen_urls:
+        for page in sorted(page_results):
+            for job in page_results[page]:
+                source_url = str(job.source_url)
+                if source_url in seen_urls:
                     continue
-                seen_urls.add(detail_url)
-
-                try:
-                    job = self._scrape_detail(detail_url)
-                except Exception:
-                    logger.exception("jobs.ch detail scrape failed for %s", detail_url)
-                    continue
-
-                if job is not None:
-                    jobs.append(job)
+                seen_urls.add(source_url)
+                jobs.append(job)
 
         return jobs
 
@@ -112,8 +160,10 @@ class JobsChScraper(BaseJobScraper):
         return urls
 
     # Extract a single normalizesJob from the url
-    def _scrape_detail(self, url: str) -> NormalizedJob | None:
-        response = self.session.get(url, timeout=self.timeout)
+    def _scrape_detail(
+        self, url: str, session: requests.Session
+    ) -> NormalizedJob | None:
+        response = session.get(url, timeout=self.timeout)
         response.raise_for_status()
         soup = _beautiful_soup(response.text)
         payload = self._extract_job_posting_json(soup)
