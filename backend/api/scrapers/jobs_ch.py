@@ -54,12 +54,29 @@ class JobsChScraper(BaseJobScraper):
         page_results: dict[int, list[NormalizedJob]] = {}
 
         with ThreadPoolExecutor(max_workers=min(5, pages)) as executor:
+
+            # Compacted version
             futures = {
                 executor.submit(
                     self._scrape_page, search_term, location, page
                 ): page
                 for page in range(1, pages + 1)
             }
+
+            # Non - compacted version
+            #futures = {}
+
+            #for page in range(1, pages + 1):
+            #    future = executor.submit(
+            #        self._scrape_page,
+            #        search_term,
+            #        location,
+            #        page,
+            #    )
+
+            #    futures[future] = page
+
+
 
             for future in as_completed(futures):
                 page = futures[future]
