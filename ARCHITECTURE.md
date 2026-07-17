@@ -37,6 +37,7 @@
 - `backend/api/services/job_ingestion.py` owns DynamoDB ingestion through boto3. It creates source items, starts and finishes scrape runs, computes content hashes, and deduplicates jobs by deterministic source URL keys.
 - `backend/api/services/job_attribute_extraction.py` uses deterministic multilingual patterns to derive normalized seniority, required languages, and remote type from each job's title and description. The jobs.ch JSON-LD and HTML-fallback flows call it before constructing `NormalizedJob`; title terms take priority over description matches, languages are deduplicated into canonical English names, and remote arrangements use `remote`, `hybrid`, or `on_site`. Structured schema.org `jobLocationType` is preferred when present, while contextual patterns distinguish working arrangements from terms such as hybrid cloud.
 - The ingestion content hash includes extracted seniority, remote type, and required languages, ensuring a repeat scrape updates older DynamoDB jobs when attribute-extraction rules add or change normalized values.
+- `backend/tests/test_jobs_ch_scraper.py` exercises the scraper without live network access. It covers listing URL construction and location normalization, multilingual detail-link extraction and deduplication, malformed JSON-LD handling, structured field normalization, the HTML fallback, cross-page deduplication, and isolation of listing/detail request failures.
 - `backend/api/routes/jobs.py` exposes:
   - `GET /jobs` to list stored jobs.
   - `GET /jobs/health` as a jobs router smoke test.

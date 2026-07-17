@@ -13,3 +13,4 @@ lib/
 node_modules/
 out/
 __pychache__/
+*pyc
