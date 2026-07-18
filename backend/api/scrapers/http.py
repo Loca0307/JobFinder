@@ -9,6 +9,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
+# Settings for the http client
 @dataclass(frozen=True)
 class ScraperHttpConfig:
     user_agent: str
