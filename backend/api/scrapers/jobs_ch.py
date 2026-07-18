@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from datetime import datetime
+from functools import lru_cache
 from typing import Any
 from urllib.parse import urljoin
 
@@ -275,3 +276,9 @@ def _beautiful_soup(html: str):
     from bs4 import BeautifulSoup
 
     return BeautifulSoup(html, "html.parser")
+
+
+@lru_cache(maxsize=1)
+def get_jobs_ch_scraper() -> JobsChScraper:
+    """Return the single jobs.ch scraper used by this backend process."""
+    return JobsChScraper()

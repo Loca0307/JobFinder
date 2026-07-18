@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, Mock, patch
 
 import requests
 
-from api.scrapers.jobs_ch import JobsChScraper, _beautiful_soup
+from api.scrapers.jobs_ch import (
+    JobsChScraper,
+    _beautiful_soup,
+    get_jobs_ch_scraper,
+)
 
 
 class JobsChScraperTests(unittest.TestCase):
@@ -246,6 +250,15 @@ class JobsChScraperTests(unittest.TestCase):
         self.assertIs(first.rate_limiter, second.rate_limiter)
         first.close()
         second.close()
+
+    def test_cached_factory_reuses_one_scraper_instance(self):
+        get_jobs_ch_scraper.cache_clear()
+
+        first = get_jobs_ch_scraper()
+        second = get_jobs_ch_scraper()
+
+        self.assertIs(first, second)
+        get_jobs_ch_scraper.cache_clear()
 
 
 if __name__ == "__main__":

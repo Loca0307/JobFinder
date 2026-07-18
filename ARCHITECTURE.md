@@ -48,6 +48,7 @@
   - `GET /jobs/health` as a jobs router smoke test.
   - `GET /jobs/scrape/jobs-ch` as a browser-friendly scrape trigger with query params.
   - `POST /jobs/scrape/jobs-ch` to run the first jobs.ch scraper and persist results.
+- `backend/api/scrapers/jobs_ch.py` exposes a cached scraper factory used by `backend/api/routes/jobs.py`. Every scrape request handled by one backend process therefore reuses the same `JobsChScraper`, including its shared rate limiter, instead of constructing independent limiters that could overlap. The factory initializes lazily so application environment loading completes before scraper settings are read.
 - `backend/main.py` includes:
   - `GET /` as a root health/discovery endpoint so Docker Compose can be checked in a browser.
   - `GET /scrape/jobs-ch` and `POST /scrape/jobs-ch` as compatibility aliases for the scraper route.

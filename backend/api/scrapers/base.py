@@ -41,16 +41,23 @@ class PaginatedJobScraper(BaseJobScraper):
             return []
 
         page_results: dict[int, list[NormalizedJob]] = {}
-        with ThreadPoolExecutor(max_workers=min(self.max_workers, pages)) as executor:
-            futures = {
-                executor.submit(self._scrape_page, search_term, location, page): page
-                for page in range(1, pages + 1)
-            }
 
-            for future in as_completed(futures):
-                page = futures[future]
+        with ThreadPoolExecutor(max_workers=min(self.max_workers, pages)) as executor:
+            page_tasks = {}
+
+            for page in range(1, pages + 1):
+                task = executor.submit(
+                    self._scrape_page,
+                    search_term,
+                    location,
+                    page,
+                )
+                page_tasks[task] = page
+
+            for completed_task in as_completed(page_tasks):
+                page = page_tasks[completed_task]
                 try:
-                    result_page, jobs = future.result()
+                    result_page, jobs = completed_task.result()
                     page_results[result_page] = jobs
                 except Exception:
                     logger.exception(

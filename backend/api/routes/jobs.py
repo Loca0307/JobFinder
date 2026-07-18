@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from api.data.schemas import JobRead, JobScrapeRequest, ScrapeRunRead
 from api.data.models import job_id
-from api.scrapers.jobs_ch import JobsChScraper
+from api.scrapers.jobs_ch import get_jobs_ch_scraper
 from api.services.job_ingestion import (
     count_jobs,
     finish_scrape_run,
@@ -18,7 +18,6 @@ from api.services.job_ingestion import (
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 JOBS_CH_PAGES_PER_RUN = 5
-
 
 
 @router.get("/count")
@@ -41,7 +40,7 @@ def list_jobs(
 def scrape_jobs_ch(
     request: JobScrapeRequest,
 ) -> ScrapeRunRead:
-    scraper = JobsChScraper()
+    scraper = get_jobs_ch_scraper()
     get_or_create_source(scraper.source_name, scraper.base_url)
     run = start_scrape_run(
         source_name=scraper.source_name,
