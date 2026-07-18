@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 from urllib.parse import urljoin
@@ -12,8 +11,8 @@ import requests
 
 from api.settings.config import get_settings
 from api.data.schemas import NormalizedJob
-from api.scrapers.base import BaseJobScraper
-from api.scrapers.http import ScraperHttpClient, ScraperHttpConfig
+from api.scrapers.base import PaginatedJobScraper
+from api.scrapers.http import RequestRateLimiter, ScraperHttpClient, ScraperHttpConfig
 from api.services.job_attribute_extraction import (
     extract_remote_type,
     extract_required_languages,
@@ -26,12 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 # Job scraper, sub class of BaseJobScraper, useds to scrape jobs.ch website
-class JobsChScraper(BaseJobScraper):
+class JobsChScraper(PaginatedJobScraper):
     source_name = "jobs.ch"
     base_url = "https://www.jobs.ch"
 
     def __init__(self) -> None:
-        settings = get_settings() # Loads setting configuration for specific scraper
+        settings = get_settings()
+        super().__init__(max_workers=settings.scraper_max_workers)
         self.http_config = ScraperHttpConfig(
             user_agent=settings.scraper_user_agent,
             connect_timeout=settings.scraper_connect_timeout_seconds,
@@ -39,60 +39,10 @@ class JobsChScraper(BaseJobScraper):
             max_retries=settings.scraper_max_retries,
             backoff_factor=settings.scraper_retry_backoff_factor,
         )
+        self.rate_limiter = RequestRateLimiter(settings.scraper_requests_per_second)
 
     def _create_http_client(self) -> ScraperHttpClient:
-        return ScraperHttpClient(self.http_config)
-
-    def scrape(
-        self,
-        search_term: str | None = None,
-        location: str | None = None,
-        pages: int = 1,
-    ) -> list[NormalizedJob]:
-        if pages < 1:
-            return []
-
-        page_results: dict[int, list[NormalizedJob]] = {}
-
-
-        # Multi thread for the 5 retrieved pages
-        with ThreadPoolExecutor(max_workers=min(5, pages)) as executor:
-
-            # Compacted version
-            futures = {
-                executor.submit(
-                    self._scrape_page, search_term, location, page
-                ): page
-                for page in range(1, pages + 1)
-            }
-
-            # Non - compacted version
-            #futures = {}
-
-            #for page in range(1, pages + 1):
-            #    future = executor.submit(
-            #        self._scrape_page,
-            #        search_term,
-            #        location,
-            #        page,
-            #    )
-
-            #    futures[future] = page
-
-
-
-            for future in as_completed(futures):
-                page = futures[future]
-                try:
-                    result_page, jobs = future.result()
-                    page_results[result_page] = jobs
-                except Exception:
-                    logger.exception(
-                        "Unexpected jobs.ch page worker failure for page %s", page
-                    )
-                    page_results[page] = []
-
-        return self._merge_page_results(page_results)
+        return ScraperHttpClient(self.http_config, self.rate_limiter)
 
     def _scrape_page(
         self,
@@ -130,22 +80,6 @@ class JobsChScraper(BaseJobScraper):
                     jobs.append(job)
 
         return page, jobs
-
-    def _merge_page_results(
-        self, page_results: dict[int, list[NormalizedJob]]
-    ) -> list[NormalizedJob]:
-        jobs: list[NormalizedJob] = []
-        seen_urls: set[str] = set()
-
-        for page in sorted(page_results):
-            for job in page_results[page]:
-                source_url = str(job.source_url)
-                if source_url in seen_urls:
-                    continue
-                seen_urls.add(source_url)
-                jobs.append(job)
-
-        return jobs
 
     # Builds the specific url to scrape for url and page
     def _build_listing_url(

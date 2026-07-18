@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     scraper_retry_backoff_factor: float = Field(
         default=1, ge=0, alias="SCRAPER_RETRY_BACKOFF_FACTOR"
     )
+    scraper_max_workers: int = Field(
+        default=5, ge=1, alias="SCRAPER_MAX_WORKERS"
+    )
+    scraper_requests_per_second: float = Field(
+        default=2, ge=0, alias="SCRAPER_REQUESTS_PER_SECOND"
+    )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

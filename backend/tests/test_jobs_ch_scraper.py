@@ -197,6 +197,18 @@ class JobsChScraperTests(unittest.TestCase):
         self.assertEqual(jobs, [])
         self.assertEqual(sorted(visited_pages), [1, 2, 3, 4, 5])
 
+    def test_scrape_defaults_to_five_pages(self):
+        visited_pages: list[int] = []
+
+        def scrape_page(search_term, location, page):
+            visited_pages.append(page)
+            return page, []
+
+        with patch.object(self.scraper, "_scrape_page", side_effect=scrape_page):
+            self.scraper.scrape()
+
+        self.assertEqual(sorted(visited_pages), [1, 2, 3, 4, 5])
+
     def test_scrape_merges_in_page_order_and_deduplicates_across_pages(self):
         first = Mock(source_url="https://example.test/job/1")
         duplicate = Mock(source_url="https://example.test/job/1")
@@ -231,6 +243,7 @@ class JobsChScraperTests(unittest.TestCase):
 
         self.assertIsNot(first, second)
         self.assertIsNot(first.session, second.session)
+        self.assertIs(first.rate_limiter, second.rate_limiter)
         first.close()
         second.close()
 

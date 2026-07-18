@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 LOCATION_ALIASES = {
     "zurigo": "Zürich",
     "zurich": "Zürich",
@@ -10,8 +13,6 @@ LOCATION_ALIASES = {
     "losanna": "Lausanne",
 }
 
- 
- 
 def normalize_location(value: str | None) -> str:
     if not value:
         return ""
