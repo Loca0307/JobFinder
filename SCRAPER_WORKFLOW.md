@@ -1,123 +1,115 @@
-# Job Scraper Request and Response Workflow
+# Job Scraper Workflow
+
+This document shows the normal path from `scraper.scrape()` to jobs.ch and back.
+The diagram emphasizes which component is responsible for each part of the work.
 
 ```mermaid
 flowchart TD
-    START(["API or service calls scraper.scrape()"])
+    CALL(["scraper.scrape(search_term, location, pages=5)"])
 
-    subgraph SCRAPER["1 · Scraper coordination"]
-        START --> INPUT["Parameters<br/>search_term · location · pages=5"]
-        INPUT --> CHECK{"pages ≥ 1?"}
-        CHECK -- "No" --> EMPTY["Return empty job list"]
-        CHECK -- "Yes" --> POOL["PaginatedJobScraper creates<br/>ThreadPoolExecutor"]
-        POOL --> WORKERS["max_workers = min<br/>(SCRAPER_MAX_WORKERS, pages)"]
+    subgraph COORDINATOR["1 · PaginatedJobScraper — coordinates the run"]
+        PLAN["Creates one task per page"]
+        POOL["ThreadPoolExecutor runs page tasks concurrently"]
+        COLLECT["Collects page results"]
+        MERGE["Restores page order and removes duplicate source URLs"]
     end
 
-    subgraph THREADS["2 · Concurrent page workers"]
-        WORKERS --> W1["_scrape_page(..., page=1)"]
-        WORKERS --> W2["_scrape_page(..., page=2)"]
-        WORKERS --> W3["_scrape_page(..., page=3)"]
-        WORKERS --> WN["_scrape_page(..., page=4–5)"]
-        W1 --> URL1["Build listing URL"]
-        W2 --> URL2["Build listing URL"]
-        W3 --> URL3["Build listing URL"]
-        WN --> URLN["Build listing URL"]
+    subgraph SOURCE["2 · JobsChScraper — understands jobs.ch"]
+        PAGE["Builds the jobs.ch listing URL for one page"]
+        LISTING["Parses the listing response and extracts detail URLs"]
+        DETAIL["Requests each job-detail URL"]
+        PARSE["Parses JSON-LD or the HTML fallback"]
+        NORMALIZE["Creates NormalizedJob objects"]
     end
 
-    subgraph CLIENTS["3 · Independent clients and sessions"]
-        URL1 --> C1["ScraperHttpClient 1<br/>requests.Session 1"]
-        URL2 --> C2["ScraperHttpClient 2<br/>requests.Session 2"]
-        URL3 --> C3["ScraperHttpClient 3<br/>requests.Session 3"]
-        URLN --> CN["ScraperHttpClient 4–5<br/>independent sessions"]
+    subgraph TRANSPORT["3 · ScraperHttpClient — controls HTTP access"]
+        GET["Receives get(url)"]
+        LIMIT["Asks the shared RequestRateLimiter for a request slot"]
+        EXECUTE["Calls its worker's requests.Session"]
+        STATUS["Checks the final HTTP status and returns the response"]
     end
 
-    subgraph LIMITER["4 · Shared source-wide rate limiter"]
-        C1 --> RL["RequestRateLimiter.wait()"]
-        C2 --> RL
-        C3 --> RL
-        CN --> RL
-        RL --> LOCK["Acquire thread lock"]
-        LOCK --> SLOT["Reserve next available<br/>request-start time"]
-        SLOT --> WAIT{"Delay required?"}
-        WAIT -- "Yes" --> SLEEP["Wait until reserved time"]
-        WAIT -- "No" --> SEND
-        SLEEP --> SEND["Call session.get()"]
+    subgraph RATE["RequestRateLimiter — controls speed across all workers"]
+        SLOT["Uses a lock to reserve the next request start time"]
+        WAIT["Waits when required<br/>Default: 2 requests per second"]
     end
 
-    subgraph HTTP["5 · Session, adapter and retry policy"]
-        SEND --> SESSION["requests.Session<br/>adds shared headers"]
-        SESSION --> HEADERS["User-Agent<br/>Accept-Language"]
-        HEADERS --> ADAPTER["HTTPAdapter"]
-        ADAPTER --> TIMEOUTS["Apply connect and read timeouts"]
-        TIMEOUTS --> NETWORK["Send HTTPS GET request"]
+    subgraph SESSION["4 · requests.Session — owns one worker's HTTP state"]
+        HEADERS["Applies User-Agent and Accept-Language headers"]
+        CONNECTIONS["Reuses that worker's network connections"]
+        DISPATCH["Sends the request through the mounted HTTPAdapter"]
     end
 
-    subgraph WEBSITE["6 · Website processing"]
-        NETWORK --> SITE["jobs.ch receives request"]
-        SITE --> RESPONSE{"HTTP response"}
+    subgraph ADAPTER["5 · HTTPAdapter + Retry — handles transport reliability"]
+        POLICY["Applies timeouts and retry policy"]
+        RETRIES["Retries temporary failures with backoff or Retry-After"]
+        SEND["Sends the HTTPS request"]
     end
 
-    subgraph RETRIES["7 · Adapter response handling"]
-        RESPONSE -- "429 / 500 / 502 / 503 / 504" --> RETRY{"Retries remaining?"}
-        RETRY -- "Yes" --> BACKOFF["Wait using exponential backoff<br/>or Retry-After header"]
-        BACKOFF --> NETWORK
-        RETRY -- "No" --> HTTPERROR["raise_for_status()<br/>raises RequestException"]
-        RESPONSE -- "Other 4xx error" --> HTTPERROR
-        RESPONSE -- "Successful 2xx response" --> HTML["Return requests.Response"]
-    end
+    SITE["6 · jobs.ch — processes the request"]
+    RESPONSE["HTTP response<br/>status · headers · HTML"]
+    RETURN(["Return list of NormalizedJob objects"])
 
-    subgraph PARSING["8 · Listing and detail processing"]
-        HTML --> LISTING["Parse listing HTML"]
-        LISTING --> LINKS["Extract and deduplicate<br/>job-detail URLs"]
-        LINKS --> EACH{"For each detail URL"}
-        EACH --> DETAILGET["client.get(detail_url)"]
-        DETAILGET --> RL
-        HTML --> DETAILCHECK{"Listing or detail response?"}
-        DETAILCHECK -- "Detail" --> JSONLD["Look for JobPosting JSON-LD"]
-        JSONLD --> HASJSON{"Valid JSON-LD?"}
-        HASJSON -- "Yes" --> NORMALIZEJSON["Normalize structured fields"]
-        HASJSON -- "No" --> FALLBACK["Parse HTML fallback"]
-        FALLBACK --> NORMALIZEHTML["Normalize available fields"]
-        NORMALIZEJSON --> JOB["Create NormalizedJob"]
-        NORMALIZEHTML --> JOB
-        JOB --> MORE{"More detail URLs?"}
-        MORE -- "Yes" --> EACH
-        MORE -- "No" --> PAGE["Return page number<br/>and page jobs"]
-    end
+    CALL --> PLAN --> POOL --> PAGE
+    PAGE -->|"listing URL"| GET
+    GET --> LIMIT --> SLOT --> WAIT --> EXECUTE
+    EXECUTE --> HEADERS --> CONNECTIONS --> DISPATCH
+    DISPATCH --> POLICY --> RETRIES --> SEND
+    SEND -->|"GET request"| SITE
+    SITE --> RESPONSE
 
-    subgraph ERRORS["9 · Failure isolation"]
-        HTTPERROR --> REQUESTTYPE{"Failed request type"}
-        REQUESTTYPE -- "Listing page" --> EMPTYPAGE["Return this page with no jobs"]
-        REQUESTTYPE -- "Job detail" --> SKIP["Log failure and skip this job"]
-        SKIP --> MORE
-        W1 -. "Unexpected worker failure" .-> FAILEDWORKER["Log exception<br/>preserve other workers"]
-        W2 -. "Unexpected worker failure" .-> FAILEDWORKER
-        W3 -. "Unexpected worker failure" .-> FAILEDWORKER
-        WN -. "Unexpected worker failure" .-> FAILEDWORKER
-    end
+    RESPONSE -. "response travels back" .-> RETRIES
+    RETRIES -.-> DISPATCH
+    DISPATCH -.-> STATUS
+    STATUS -. "listing response" .-> LISTING
 
-    subgraph MERGE["10 · Final result assembly"]
-        PAGE --> RESULTS["Collect completed page results"]
-        EMPTYPAGE --> RESULTS
-        FAILEDWORKER --> RESULTS
-        RESULTS --> ORDER["Sort results by page number"]
-        ORDER --> DEDUP["Deduplicate jobs by source_url"]
-        DEDUP --> FINAL(["Return list[NormalizedJob]"])
-    end
+    LISTING --> DETAIL
+    DETAIL -->|"detail URL: same HTTP path"| GET
+    STATUS -. "detail response" .-> PARSE
+    PARSE --> NORMALIZE
+    NORMALIZE --> COLLECT --> MERGE --> RETURN
 ```
 
-## Component ownership
+## Responsibility boundaries
 
-| Component | File | Responsibility |
+| Component | Responsible for | Not responsible for |
 |---|---|---|
-| `BaseJobScraper` | `backend/api/scrapers/base.py` | Defines the common scraper contract |
-| `PaginatedJobScraper` | `backend/api/scrapers/base.py` | Thread pool, page coordination, failure isolation, and final merging |
-| `JobsChScraper` | `backend/api/scrapers/jobs_ch.py` | jobs.ch URLs, listing parsing, detail parsing, and normalization |
-| `RequestRateLimiter` | `backend/api/scrapers/http.py` | Coordinates request timing across every worker |
-| `ScraperHttpClient` | `backend/api/scrapers/http.py` | Applies rate limiting and performs HTTP operations |
-| `requests.Session` | Created inside `ScraperHttpClient` | Maintains headers and connections for one worker |
-| `HTTPAdapter` | Mounted on each session | Connection pooling and automatic retries |
-| `Retry` | Installed through the adapter | Status handling, exponential backoff, and `Retry-After` support |
+| `BaseJobScraper` | Defining the common `scrape()` contract | Threads, HTTP, or jobs.ch parsing |
+| `PaginatedJobScraper` | Creating page tasks, running the thread pool, collecting, ordering, and deduplicating results | Website-specific URLs or HTML parsing |
+| `JobsChScraper` | Building jobs.ch URLs, discovering detail links, parsing responses, and creating `NormalizedJob` objects | Generic thread coordination or retry implementation |
+| `RequestRateLimiter` | Enforcing one request rate across every worker belonging to the scraper | Sending requests or interpreting responses |
+| `ScraperHttpClient` | Connecting the rate limiter to the session and checking final HTTP errors | Understanding jobs.ch HTML |
+| `requests.Session` | Keeping one worker's headers, cookies, and reusable connections | Coordinating other worker sessions |
+| `HTTPAdapter` and `Retry` | Connection pooling, retries, backoff, and `Retry-After` handling | Page scheduling or job normalization |
+| `jobs.ch` | Receiving the request and returning an HTTP response | Internal scraper behavior |
 
-Each thread owns an independent HTTP session, while every thread in the scraper
-shares one rate limiter. This preserves safe concurrency while enforcing a single
-source-wide request rate.
+## Important ownership rule
+
+```text
+One JobsChScraper run
+├── one shared RequestRateLimiter
+├── one PaginatedJobScraper coordinator
+└── multiple page workers
+    ├── worker 1 → HTTP client 1 → Session 1 → HTTPAdapter
+    ├── worker 2 → HTTP client 2 → Session 2 → HTTPAdapter
+    └── worker N → HTTP client N → Session N → HTTPAdapter
+```
+
+Sessions are independent because each belongs to one worker. The limiter is shared
+because it must control the combined request rate of all workers.
+
+## Normal workflow in plain language
+
+1. `PaginatedJobScraper.scrape()` creates five page tasks.
+2. The thread pool starts those tasks concurrently.
+3. Each task calls the jobs.ch-specific `_scrape_page()` method.
+4. `JobsChScraper` builds a listing URL and asks its `ScraperHttpClient` to fetch it.
+5. The client waits for the shared rate limiter before starting the request.
+6. The worker's session applies headers and passes the request to its HTTP adapter.
+7. The adapter sends the request and manages temporary retries.
+8. jobs.ch returns an HTTP response through the same transport components.
+9. `JobsChScraper` extracts job-detail URLs from the listing response.
+10. Each detail URL follows the same client, limiter, session, and adapter path.
+11. `JobsChScraper` parses each detail response into a `NormalizedJob`.
+12. `PaginatedJobScraper` collects all page results, restores page order, removes
+    duplicate source URLs, and returns the final job list.
