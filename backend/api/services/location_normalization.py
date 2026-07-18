@@ -10,7 +10,8 @@ LOCATION_ALIASES = {
     "losanna": "Lausanne",
 }
 
-
+ 
+ 
 def normalize_location(value: str | None) -> str:
     if not value:
         return ""
