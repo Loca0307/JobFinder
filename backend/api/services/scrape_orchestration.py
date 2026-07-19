@@ -14,8 +14,9 @@ def scrape_sources(
     scrapers: list[BaseJobScraper],
     search_term: str | None,
     location: str | None,
-    pages_by_source: dict[str, int],
+    pages_by_source: dict[str, int] | None = None,
 ) -> dict[str, Any]:
+    pages_by_source = pages_by_source or {}
     with ThreadPoolExecutor(max_workers=len(scrapers)) as executor:
         tasks = {
             executor.submit(
@@ -23,7 +24,7 @@ def scrape_sources(
                 scraper,
                 search_term,
                 location,
-                pages_by_source.get(scraper.source_name, 1),
+                pages_by_source.get(scraper.source_name, scraper.default_pages),
             ): scraper.source_name
             for scraper in scrapers
         }

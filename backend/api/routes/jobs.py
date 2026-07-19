@@ -19,8 +19,6 @@ from api.services.job_interactions import (
 )
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
-JOBS_CH_PAGES = 5
-SWISS_DEV_JOBS_PAGES = 5
 
 
 @router.post("/scrape", response_model=MultiSourceScrapeResult)
@@ -29,10 +27,6 @@ def scrape_all_sources(request: JobScrapeRequest) -> MultiSourceScrapeResult:
         [get_jobs_ch_scraper(), get_swiss_dev_jobs_scraper()],
         request.search_term,
         request.location,
-        {
-            "jobs.ch": JOBS_CH_PAGES,
-            "swissdevjobs.ch": SWISS_DEV_JOBS_PAGES,
-        },
     )
     if result["status"] == "failed":
         raise HTTPException(status_code=502, detail=result)

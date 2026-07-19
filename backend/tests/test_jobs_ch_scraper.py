@@ -191,16 +191,14 @@ class JobsChScraperTests(unittest.TestCase):
             "https://www.jobs.ch/en/vacancies/detail/job-42/", client
         )
 
-    def test_scrape_page_returns_empty_result_after_listing_failure(self):
+    def test_scrape_page_propagates_listing_failure(self):
         client = MagicMock()
         client.__enter__.return_value = client
         client.get.side_effect = requests.HTTPError("503")
 
         with patch.object(self.scraper, "_create_http_client", return_value=client):
-            page, jobs = self.scraper._scrape_page(None, None, 4)
-
-        self.assertEqual(page, 4)
-        self.assertEqual(jobs, [])
+            with self.assertRaises(requests.HTTPError):
+                self.scraper._scrape_page(None, None, 4)
 
     def test_scrape_runs_five_pages_concurrently(self):
         barrier = threading.Barrier(5, timeout=2)
@@ -258,6 +256,13 @@ class JobsChScraperTests(unittest.TestCase):
             jobs = self.scraper.scrape(pages=2)
 
         self.assertEqual(jobs, [surviving_job])
+
+    def test_scrape_fails_when_every_page_fails(self):
+        with patch.object(
+            self.scraper, "_scrape_page", side_effect=requests.HTTPError("503")
+        ):
+            with self.assertRaisesRegex(RuntimeError, "All 2 requested pages failed"):
+                self.scraper.scrape(pages=2)
 
     def test_each_created_http_client_is_independent(self):
         first = self.scraper._create_http_client()

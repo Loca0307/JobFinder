@@ -66,6 +66,20 @@ class ScrapeOrchestrationTests(unittest.TestCase):
         self.assertEqual(result["jobs"], [])
         self.assertEqual(len(result["sources"]), 2)
 
+    def test_uses_each_scraper_default_page_count(self):
+        self.jobs_ch.default_pages = 5
+        self.swiss_dev.default_pages = 1
+        self.jobs_ch.scrape.return_value = []
+        self.swiss_dev.scrape.return_value = []
+
+        result = scrape_sources(
+            [self.jobs_ch, self.swiss_dev], "python", "Zürich"
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.jobs_ch.scrape.assert_called_once_with("python", "Zürich", 5)
+        self.swiss_dev.scrape.assert_called_once_with("python", "Zürich", 1)
+
 
 if __name__ == "__main__":
     unittest.main()

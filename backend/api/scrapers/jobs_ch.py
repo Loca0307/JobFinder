@@ -49,20 +49,10 @@ class JobsChScraper(PaginatedJobScraper):
         location: str | None,
         page: int,
     ) -> tuple[int, list[NormalizedJob]]:
-        jobs: list[NormalizedJob] = []
         listing_url = self._build_listing_url(search_term, location, page)
 
         with self._create_http_client() as client:
-            try:
-                response = client.get(listing_url)
-            except requests.RequestException as exc:
-                logger.warning(
-                    "jobs.ch listing page %s request failed after retries: %s",
-                    page,
-                    exc,
-                )
-                return page, jobs
-
+            response = client.get(listing_url)
             jobs = self._extract_listing_jobs(response.text)
 
         return page, jobs
