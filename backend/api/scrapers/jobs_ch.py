@@ -10,7 +10,7 @@ import requests
 
 from api.settings.config import get_settings
 from api.data.schemas import NormalizedJob
-from api.scrapers.base import PaginatedJobScraper
+from api.scrapers.base import PaginatedJobScraper, ScrapeError
 from api.scrapers.http import RequestRateLimiter, ScraperHttpClient, ScraperHttpConfig
 from api.services.job_attribute_extraction import (
     extract_remote_type,
@@ -75,16 +75,21 @@ class JobsChScraper(PaginatedJobScraper):
     def _extract_listing_jobs(self, html: str) -> list[NormalizedJob]:
         marker = re.search(r"__INIT__\s*=\s*", html)
         if marker is None:
-            return []
+            raise ScrapeError("jobs.ch listing payload marker is missing")
 
         try:
             state, _ = json.JSONDecoder().raw_decode(html, marker.end())
             results = state["vacancy"]["results"]["main"]["results"]
-        except (json.JSONDecodeError, KeyError, TypeError):
-            return []
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise ScrapeError("jobs.ch listing payload is malformed") from exc
+
+        if not isinstance(results, list):
+            raise ScrapeError("jobs.ch listing results have an invalid shape")
 
         jobs: list[NormalizedJob] = []
         for summary in results:
+            if not isinstance(summary, dict):
+                continue
             external_id = summary.get("id")
             title = summary.get("title")
             if not external_id or not title:
@@ -106,6 +111,9 @@ class JobsChScraper(PaginatedJobScraper):
                     details_loaded=False,
                 )
             )
+        if results and not jobs:
+            raise ScrapeError("jobs.ch listing results contain no usable jobs")
+
         return jobs
 
     def scrape_detail(self, external_id: str) -> NormalizedJob | None:

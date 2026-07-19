@@ -24,7 +24,7 @@ flowchart TD
         PAGEPLAN["Creates one task per requested page<br/>default: 5"]
         PAGEPOOL["Runs page tasks concurrently<br/>bounded by SCRAPER_MAX_WORKERS"]
         LISTURL["Normalizes the location and builds a listing URL"]
-        INITJSON["Parses embedded __INIT__ JSON into summaries"]
+        INITJSON["Validates and parses embedded __INIT__ JSON into summaries"]
         LIGHT["Returns NormalizedJob summaries<br/>details_loaded = false"]
         PAGEMERGE["Keeps successful pages, restores page order,<br/>and deduplicates by source URL"]
     end
@@ -145,8 +145,10 @@ have separate bounds.
 2. The source executor starts both scrapers concurrently, up to
    `SCRAPER_SOURCE_MAX_WORKERS`.
 3. `JobsChScraper` creates five page tasks by default. Each worker normalizes
-   the requested location, fetches one listing, and parses its embedded
-   `__INIT__` JSON into lightweight summaries without opening detail pages.
+   the requested location, fetches one listing, and validates its embedded
+   `__INIT__` structure before creating lightweight summaries without opening
+   detail pages. A valid empty results list succeeds; a missing or malformed
+   payload raises `ScrapeError`.
 4. The jobs.ch coordinator preserves successful pages even if another page
    fails. It raises `ScrapeError` only when every requested page fails, then
    restores page order and removes duplicate source URLs.

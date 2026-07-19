@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import requests
 
+from api.scrapers.base import ScrapeError
 from api.scrapers.jobs_ch import (
     JobsChScraper,
     _beautiful_soup,
@@ -64,6 +65,43 @@ class JobsChScraperTests(unittest.TestCase):
         self.assertEqual(jobs[0].location, "Zürich")
         self.assertEqual(jobs[0].external_id, "job-42")
         self.assertFalse(jobs[0].details_loaded)
+
+    def test_extract_listing_jobs_accepts_valid_empty_results(self):
+        state = {"vacancy": {"results": {"main": {"results": []}}}}
+
+        jobs = self.scraper._extract_listing_jobs(
+            f"<script>__INIT__ = {json.dumps(state)};</script>"
+        )
+
+        self.assertEqual(jobs, [])
+
+    def test_extract_listing_jobs_rejects_missing_payload_marker(self):
+        with self.assertRaisesRegex(ScrapeError, "payload marker is missing"):
+            self.scraper._extract_listing_jobs("<html></html>")
+
+    def test_extract_listing_jobs_rejects_malformed_payload(self):
+        with self.assertRaisesRegex(ScrapeError, "payload is malformed"):
+            self.scraper._extract_listing_jobs("<script>__INIT__ = {bad}</script>")
+
+    def test_extract_listing_jobs_rejects_invalid_results_shape(self):
+        state = {"vacancy": {"results": {"main": {"results": {}}}}}
+
+        with self.assertRaisesRegex(ScrapeError, "invalid shape"):
+            self.scraper._extract_listing_jobs(
+                f"<script>__INIT__ = {json.dumps(state)};</script>"
+            )
+
+    def test_extract_listing_jobs_rejects_nonempty_unusable_results(self):
+        state = {
+            "vacancy": {
+                "results": {"main": {"results": [{"unexpected": "shape"}]}}
+            }
+        }
+
+        with self.assertRaisesRegex(ScrapeError, "contain no usable jobs"):
+            self.scraper._extract_listing_jobs(
+                f"<script>__INIT__ = {json.dumps(state)};</script>"
+            )
 
     def test_extract_job_posting_json_skips_malformed_scripts(self):
         valid_payload = {"@type": "JobPosting", "title": "Backend Engineer"}
