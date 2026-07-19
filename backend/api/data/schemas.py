@@ -50,17 +50,21 @@ class JobScrapeRequest(BaseModel):
     location: Optional[str] = Field(default=None, max_length=255)
 
 
-# Meta data received from scraping requests
-class ScrapeRunRead(BaseModel):
-    id: str
+# Counts shared by single-source and multi-source scrape responses
+class ScrapeSummary(BaseModel):
     status: str
+    jobs_found: int
+    jobs_created: int
+    jobs_updated: int
+
+
+# Complete persisted scrape-run record returned by the legacy jobs.ch endpoint
+class ScrapeRunRead(ScrapeSummary):
+    id: str
     source_id: str
     search_term: Optional[str]
     location: Optional[str]
     pages_requested: int
-    jobs_found: int
-    jobs_created: int
-    jobs_updated: int
     job_ids: List[str] = Field(default_factory=list)
     jobs: List[JobRead] = Field(default_factory=list)
     error_message: Optional[str]
@@ -68,3 +72,13 @@ class ScrapeRunRead(BaseModel):
     finished_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SourceScrapeResult(ScrapeSummary):
+    source_id: str
+    error_message: Optional[str] = None
+
+
+class MultiSourceScrapeResult(ScrapeSummary):
+    jobs: List[JobRead] = Field(default_factory=list)
+    sources: List[SourceScrapeResult] = Field(default_factory=list)

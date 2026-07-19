@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchJobCount, fetchJobs, scrapeJobsCh } from "@/lib/jobs";
+import { fetchJobCount, fetchJobs, scrapeJobs } from "@/lib/jobs";
 import type { Job, ScrapeRun } from "@/types/job";
 
 export function useJobsDashboard() {
@@ -53,11 +53,11 @@ export function useJobsDashboard() {
     clearResults();
   }
 
-  async function searchJobsCh() {
+  async function searchJobs() {
     setIsScraping(true);
     setError(null);
     try {
-      const run = await scrapeJobsCh({
+      const run = await scrapeJobs({
         search_term: scrapeTerm.trim() || undefined,
         location: scrapeLocation.trim() || undefined
       });
@@ -65,7 +65,7 @@ export function useJobsDashboard() {
       showJobs(run.jobs);
       await refreshStoredJobCount();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "jobs.ch search failed");
+      setError(err instanceof Error ? err.message : "Job search failed");
     } finally {
       setIsScraping(false);
     }
@@ -103,7 +103,7 @@ export function useJobsDashboard() {
     error,
     lastRun,
     storedJobCount,
-    searchJobsCh,
+    searchJobs,
     searchStoredJobs,
     clearAllSearches
   };

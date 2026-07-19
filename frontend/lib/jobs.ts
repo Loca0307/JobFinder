@@ -22,8 +22,8 @@ export async function fetchJobs(limit = 50, query = "", location = ""): Promise<
   return response.json() as Promise<Job[]>;
 }
 
-export async function scrapeJobsCh(request: JobScrapeRequest): Promise<ScrapeRun> {
-  const response = await fetch(`${API_BASE_URL}/jobs/scrape/jobs-ch`, {
+export async function scrapeJobs(request: JobScrapeRequest): Promise<ScrapeRun> {
+  const response = await fetch(`${API_BASE_URL}/jobs/scrape`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request)
@@ -31,7 +31,11 @@ export async function scrapeJobsCh(request: JobScrapeRequest): Promise<ScrapeRun
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(payload?.detail ?? `jobs.ch search failed (${response.status})`);
+    throw new Error(
+      typeof payload?.detail === "string"
+        ? payload.detail
+        : `Job search failed (${response.status})`
+    );
   }
 
   return response.json() as Promise<ScrapeRun>;

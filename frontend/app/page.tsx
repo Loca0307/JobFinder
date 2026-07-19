@@ -41,7 +41,7 @@ export default function Home() {
         isLoading={dashboard.isScraping}
         onTermChange={dashboard.setScrapeTerm}
         onLocationChange={dashboard.setScrapeLocation}
-        onSubmit={dashboard.searchJobsCh}
+        onSubmit={dashboard.searchJobs}
       />
 
       {dashboard.lastRun ? (

@@ -4,9 +4,16 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException
 
-from api.data.schemas import JobRead, JobScrapeRequest, ScrapeRunRead
+from api.data.schemas import (
+    JobRead,
+    JobScrapeRequest,
+    MultiSourceScrapeResult,
+    ScrapeRunRead,
+)
 from api.data.models import job_id
 from api.scrapers.jobs_ch import get_jobs_ch_scraper
+from api.scrapers.swiss_dev_jobs import get_swiss_dev_jobs_scraper
+from api.services.scrape_orchestration import scrape_sources
 from api.services.job_ingestion import (
     count_jobs,
     finish_scrape_run,
@@ -17,7 +24,24 @@ from api.services.job_ingestion import (
 )
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
-JOBS_CH_PAGES_PER_RUN = 5
+JOBS_CH_PAGES = 5
+SWISS_DEV_JOBS_PAGES = 5
+
+
+@router.post("/scrape", response_model=MultiSourceScrapeResult)
+def scrape_all_sources(request: JobScrapeRequest) -> MultiSourceScrapeResult:
+    result = scrape_sources(
+        [get_jobs_ch_scraper(), get_swiss_dev_jobs_scraper()],
+        request.search_term,
+        request.location,
+        {
+            "jobs.ch": JOBS_CH_PAGES,
+            "swissdevjobs.ch": SWISS_DEV_JOBS_PAGES,
+        },
+    )
+    if result["status"] == "failed":
+        raise HTTPException(status_code=502, detail=result)
+    return result
 
 
 @router.get("/count")
@@ -46,14 +70,14 @@ def scrape_jobs_ch(
         source_name=scraper.source_name,
         search_term=request.search_term,
         location=request.location,
-        pages=JOBS_CH_PAGES_PER_RUN,
+        pages=JOBS_CH_PAGES,
     )
 
     try:
         normalized_jobs = scraper.scrape(
             search_term=request.search_term,
             location=request.location,
-            pages=JOBS_CH_PAGES_PER_RUN,
+            pages=JOBS_CH_PAGES,
         )
         created, updated = upsert_jobs(normalized_jobs)
         finished_run = finish_scrape_run(
