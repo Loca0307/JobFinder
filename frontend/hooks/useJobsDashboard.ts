@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchJobInteractions, fetchJobsChDetail, saveJobInteraction, scrapeJobs } from "@/lib/jobs";
+import { fetchJobDetail, fetchJobInteractions, saveJobInteraction, scrapeJobs } from "@/lib/jobs";
 import type { Job, JobInteraction, ScrapeResult } from "@/types/job";
 
 const SEARCH_STORAGE_KEY = "jobfinder.live-search";
@@ -74,8 +74,8 @@ export function useJobsDashboard() {
 
   useEffect(() => {
     if (
-      selectedJob?.source_website !== "jobs.ch" ||
-      selectedJob.details_loaded !== false ||
+      selectedJob?.details_loaded !== false ||
+      !selectedJob.source_website ||
       !selectedJob.external_id ||
       requestedDetailIds.current.has(selectedJob.id)
     ) {
@@ -84,7 +84,7 @@ export function useJobsDashboard() {
 
     requestedDetailIds.current.add(selectedJob.id);
     setLoadingDetailId(selectedJob.id);
-    void fetchJobsChDetail(selectedJob.external_id)
+    void fetchJobDetail(selectedJob.source_website, selectedJob.external_id)
       .then((detail) => {
         setJobs((current) => current.map((job) => job.id === detail.id ? detail : job));
         setLiveJobs((current) => current.map((job) => job.id === detail.id ? detail : job));

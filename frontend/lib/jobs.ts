@@ -21,9 +21,9 @@ export async function scrapeJobs(request: JobScrapeRequest): Promise<ScrapeResul
   return response.json() as Promise<ScrapeResult>;
 }
 
-export async function fetchJobsChDetail(externalId: string): Promise<Job> {
+export async function fetchJobDetail(sourceId: string, externalId: string): Promise<Job> {
   const response = await fetch(
-    `${API_BASE_URL}/jobs/jobs-ch/${encodeURIComponent(externalId)}`
+    `${API_BASE_URL}/jobs/details/${encodeURIComponent(sourceId)}/${encodeURIComponent(externalId)}`
   );
   if (!response.ok) throw new Error(`Failed to load job details (${response.status})`);
   return response.json() as Promise<Job>;

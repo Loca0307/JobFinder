@@ -1,115 +1,170 @@
 # Job Scraper Workflow
 
-This document shows the normal path from `scraper.scrape()` to jobs.ch and back.
-The diagram emphasizes which component is responsible for each part of the work.
+This document shows the normal path from `POST /jobs/scrape` through both job
+sources and back to the frontend. The diagram emphasizes which component is
+responsible for each part of the work and reflects the source-neutral lazy-detail flow.
 
 ```mermaid
 flowchart TD
-    CALL(["scraper.scrape(search_term, location, pages=5)"])
+    CALL(["POST /jobs/scrape<br/>search_term · location"])
 
-    subgraph COORDINATOR["1 · PaginatedJobScraper — coordinates the run"]
-        PLAN["Creates one task per page"]
-        POOL["ThreadPoolExecutor runs page tasks concurrently"]
-        COLLECT["Collects page results"]
-        MERGE["Restores page order and removes duplicate source URLs"]
+    subgraph API["1 · FastAPI route — starts a live search"]
+        VALIDATE["Validates JobScrapeRequest"]
+        REGISTER["Loads all enabled scrapers from the registry"]
     end
 
-    subgraph SOURCE["2 · JobsChScraper — understands jobs.ch"]
-        PAGE["Builds the jobs.ch listing URL for one page"]
-        LISTING["Parses the listing response and extracts detail URLs"]
-        DETAIL["Requests each job-detail URL"]
-        PARSE["Parses JSON-LD or the HTML fallback"]
-        NORMALIZE["Creates NormalizedJob objects"]
+    subgraph ORCHESTRATOR["2 · scrape_sources — coordinates all sources"]
+        SOURCEPOOL["Runs sources concurrently<br/>bounded by SCRAPER_SOURCE_MAX_WORKERS"]
+        ISOLATE["Captures each source result or failure"]
+        CROSSDEDUPE["Combines successful results and removes<br/>cross-board duplicates by title · company · location"]
+        SUMMARY["Builds aggregate status, source diagnostics,<br/>stable job IDs, and the final job list"]
     end
 
-    subgraph TRANSPORT["3 · ScraperHttpClient — controls HTTP access"]
-        GET["Receives get(url)"]
-        LIMIT["Asks the shared RequestRateLimiter for a request slot"]
-        EXECUTE["Calls its worker's requests.Session"]
-        STATUS["Checks the final HTTP status and returns the response"]
+    subgraph JOBSCH["3A · JobsChScraper — paginated lightweight search"]
+        PAGEPLAN["Creates one task per requested page<br/>default: 5"]
+        PAGEPOOL["Runs page tasks concurrently<br/>bounded by SCRAPER_MAX_WORKERS"]
+        LISTURL["Normalizes the location and builds a listing URL"]
+        INITJSON["Parses embedded __INIT__ JSON into summaries"]
+        LIGHT["Returns NormalizedJob summaries<br/>details_loaded = false"]
+        PAGEMERGE["Keeps successful pages, restores page order,<br/>and deduplicates by source URL"]
     end
 
-    subgraph RATE["RequestRateLimiter — controls speed across all workers"]
-        SLOT["Uses a lock to reserve the next request start time"]
-        WAIT["Waits when required<br/>Default: 2 requests per second"]
+    subgraph SWISSDEV["3B · SwissDevJobsScraper — one RSS request"]
+        RSS["Requests /rss once<br/>pages is ignored"]
+        XML["Parses XML items and embedded HTML sections"]
+        FILTER["Applies local keyword and normalized-location filters"]
+        CANONICAL["Removes tracking parameters and<br/>deduplicates canonical source URLs"]
+        COMPLETE["Returns complete NormalizedJob objects"]
     end
 
-    subgraph SESSION["4 · requests.Session — owns one worker's HTTP state"]
-        HEADERS["Applies User-Agent and Accept-Language headers"]
-        CONNECTIONS["Reuses that worker's network connections"]
-        DISPATCH["Sends the request through the mounted HTTPAdapter"]
+    subgraph TRANSPORT["4 · Per-source HTTP path"]
+        GET["ScraperHttpClient.get(url)"]
+        LIMIT["Shared rate limiter reserves a request slot"]
+        SESSION["Worker-owned requests.Session applies headers<br/>and reuses connections"]
+        RETRY["HTTPAdapter retries temporary failures<br/>with backoff or Retry-After"]
+        STATUS["Final status is checked and the response returned"]
     end
 
-    subgraph ADAPTER["5 · HTTPAdapter + Retry — handles transport reliability"]
-        POLICY["Applies timeouts and retry policy"]
-        RETRIES["Retries temporary failures with backoff or Retry-After"]
-        SEND["Sends the HTTPS request"]
-    end
+    JOBSCHSITE["jobs.ch"]
+    RSSSITE["swissdevjobs.ch/rss"]
+    RETURN(["MultiSourceScrapeResult<br/>completed · partial · or HTTP 502 if all sources fail"])
 
-    SITE["6 · jobs.ch — processes the request"]
-    RESPONSE["HTTP response<br/>status · headers · HTML"]
-    RETURN(["Return list of NormalizedJob objects"])
+    CALL --> VALIDATE --> REGISTER --> SOURCEPOOL
+    SOURCEPOOL --> PAGEPLAN --> PAGEPOOL --> LISTURL
+    SOURCEPOOL --> RSS
 
-    CALL --> PLAN --> POOL --> PAGE
-    PAGE -->|"listing URL"| GET
-    GET --> LIMIT --> SLOT --> WAIT --> EXECUTE
-    EXECUTE --> HEADERS --> CONNECTIONS --> DISPATCH
-    DISPATCH --> POLICY --> RETRIES --> SEND
-    SEND -->|"GET request"| SITE
-    SITE --> RESPONSE
+    LISTURL -->|"listing request"| GET
+    RSS -->|"feed request"| GET
+    GET --> LIMIT --> SESSION --> RETRY
+    RETRY -->|"HTTPS GET"| JOBSCHSITE
+    RETRY -->|"HTTPS GET"| RSSSITE
+    JOBSCHSITE -. "listing response" .-> STATUS
+    RSSSITE -. "RSS response" .-> STATUS
+    STATUS -.-> INITJSON
+    STATUS -.-> XML
 
-    RESPONSE -. "response travels back" .-> RETRIES
-    RETRIES -.-> DISPATCH
-    DISPATCH -.-> STATUS
-    STATUS -. "listing response" .-> LISTING
+    INITJSON --> LIGHT --> PAGEMERGE --> ISOLATE
+    XML --> FILTER --> CANONICAL --> COMPLETE --> ISOLATE
+    ISOLATE --> CROSSDEDUPE --> SUMMARY --> RETURN
+```
 
-    LISTING --> DETAIL
-    DETAIL -->|"detail URL: same HTTP path"| GET
-    STATUS -. "detail response" .-> PARSE
-    PARSE --> NORMALIZE
-    NORMALIZE --> COLLECT --> MERGE --> RETURN
+## On-demand source detail workflow
+
+The live search deliberately does not request every detail page. A detail is
+loaded only when the user selects an incomplete summary from a source that
+implements the detail capability.
+
+```mermaid
+flowchart LR
+    SELECT(["User selects an incomplete result"])
+    CHECK{"details_loaded?"}
+    USE["Use the already complete job"]
+    ROUTE["GET /jobs/details/{source_id}/{external_id}"]
+    RESOLVE["Registry resolves a detail-capable scraper"]
+    VALIDATE["Source validates its external ID"]
+    FETCH["Fetch the detail through the same<br/>client · limiter · session · retry path"]
+    JSONLD{"JobPosting JSON-LD found?"}
+    STRUCTURED["Parse structured job fields"]
+    FALLBACK["Parse title and description<br/>from the HTML fallback"]
+    ATTRIBUTES["Normalize seniority · remote type<br/>and required languages"]
+    REPLACE["Return details_loaded = true and replace<br/>the summary in frontend state and cache"]
+    ACTIONS["Enable star, applied, and external Apply actions"]
+
+    SELECT --> CHECK
+    CHECK -->|"yes / RSS job"| USE
+    CHECK -->|"no"| ROUTE --> RESOLVE --> VALIDATE --> FETCH --> JSONLD
+    JSONLD -->|"yes"| STRUCTURED --> ATTRIBUTES
+    JSONLD -->|"no"| FALLBACK --> ATTRIBUTES
+    ATTRIBUTES --> REPLACE --> ACTIONS
 ```
 
 ## Responsibility boundaries
 
 | Component | Responsible for | Not responsible for |
 |---|---|---|
-| `BaseJobScraper` | Defining the common `scrape()` contract | Threads, HTTP, or jobs.ch parsing |
-| `PaginatedJobScraper` | Creating page tasks, running the thread pool, collecting, ordering, and deduplicating results | Website-specific URLs or HTML parsing |
-| `JobsChScraper` | Building jobs.ch URLs, discovering detail links, parsing responses, and creating `NormalizedJob` objects | Generic thread coordination or retry implementation |
-| `RequestRateLimiter` | Enforcing one request rate across every worker belonging to the scraper | Sending requests or interpreting responses |
-| `ScraperHttpClient` | Connecting the rate limiter to the session and checking final HTTP errors | Understanding jobs.ch HTML |
-| `requests.Session` | Keeping one worker's headers, cookies, and reusable connections | Coordinating other worker sessions |
-| `HTTPAdapter` and `Retry` | Connection pooling, retries, backoff, and `Retry-After` handling | Page scheduling or job normalization |
-| `jobs.ch` | Receiving the request and returning an HTTP response | Internal scraper behavior |
+| Scraper registry | Returning all enabled search sources and resolving optional detail capability by canonical source name | Scraping, parsing, or HTTP error translation |
+| `POST /jobs/scrape` route | Validating the request, loading registered scrapers, and translating total failure to HTTP 502 | Source scheduling, parsing, or persistence |
+| Generic detail route | Resolving a detail-capable source, delegating one external ID, and translating validation, missing-job, and upstream errors | Source-specific URL construction or parsing |
+| `scrape_sources` | Bounded source concurrency, source-failure isolation, cross-source deduplication, aggregate status, and stable response IDs | Source-specific URLs, parsing, or HTTP retries |
+| `BaseJobScraper` / `DetailJobScraper` | Defining the common search contract and the optional on-demand detail capability | Threads, HTTP, or source parsing |
+| `PaginatedJobScraper` | Page tasks, bounded page concurrency, partial-page success, page ordering, and source-URL deduplication | Website-specific URLs or HTML/JSON parsing |
+| `JobsChScraper` | Building jobs.ch listing URLs, parsing lightweight summaries, and loading one detail on demand | Cross-source coordination or interaction persistence |
+| `SwissDevJobsScraper` | Fetching and parsing RSS, local search filtering, canonical URLs, and complete RSS job normalization | Pagination or on-demand detail loading |
+| `RequestRateLimiter` | Enforcing one request-start rate across clients belonging to a cached scraper | Sending or interpreting responses |
+| `ScraperHttpClient` | Applying the limiter, timeouts, retry-enabled sessions, final status checks, and cleanup | Understanding source payloads |
+| `job_attribute_extraction` | Deterministically normalizing seniority, languages, and remote type | Fetching jobs or AI-based scoring |
+| Frontend detail loader | Fetching any incomplete job by source and external ID, then replacing its cached summary | Knowing source-specific endpoints or scraping all details during search |
+| DynamoDB interaction service | Saving only starred/applied job snapshots after explicit user actions | Persisting live-search results or scrape diagnostics |
 
 ## Important ownership rule
 
 ```text
-One JobsChScraper run
-├── one shared RequestRateLimiter
-├── one PaginatedJobScraper coordinator
-└── multiple page workers
-    ├── worker 1 → HTTP client 1 → Session 1 → HTTPAdapter
-    ├── worker 2 → HTTP client 2 → Session 2 → HTTPAdapter
-    └── worker N → HTTP client N → Session N → HTTPAdapter
+One backend process
+├── one cached JobsChScraper
+│   ├── one shared jobs.ch RequestRateLimiter
+│   └── concurrent page workers
+│       ├── worker 1 → HTTP client 1 → Session 1 → HTTPAdapter
+│       ├── worker 2 → HTTP client 2 → Session 2 → HTTPAdapter
+│       └── worker N → HTTP client N → Session N → HTTPAdapter
+├── one cached SwissDevJobsScraper
+│   ├── one shared SwissDevJobs RequestRateLimiter
+│   └── one request → HTTP client → Session → HTTPAdapter
+└── scrape_sources
+    └── bounded source workers run both scraper instances concurrently
 ```
 
-Sessions are independent because each belongs to one worker. The limiter is shared
-because it must control the combined request rate of all workers.
+Sessions are independent because each belongs to one worker/client context. A
+limiter is shared within each cached scraper so concurrent requests to that
+source obey one combined rate. The source executor and jobs.ch page executor
+have separate bounds.
 
 ## Normal workflow in plain language
 
-1. `PaginatedJobScraper.scrape()` creates five page tasks.
-2. The thread pool starts those tasks concurrently.
-3. Each task calls the jobs.ch-specific `_scrape_page()` method.
-4. `JobsChScraper` builds a listing URL and asks its `ScraperHttpClient` to fetch it.
-5. The client waits for the shared rate limiter before starting the request.
-6. The worker's session applies headers and passes the request to its HTTP adapter.
-7. The adapter sends the request and manages temporary retries.
-8. jobs.ch returns an HTTP response through the same transport components.
-9. `JobsChScraper` extracts job-detail URLs from the listing response.
-10. Each detail URL follows the same client, limiter, session, and adapter path.
-11. `JobsChScraper` parses each detail response into a `NormalizedJob`.
-12. `PaginatedJobScraper` collects all page results, restores page order, removes
-    duplicate source URLs, and returns the final job list.
+1. FastAPI validates `JobScrapeRequest` and passes the cached jobs.ch and
+   SwissDevJobs scraper instances to `scrape_sources()`.
+2. The source executor starts both scrapers concurrently, up to
+   `SCRAPER_SOURCE_MAX_WORKERS`.
+3. `JobsChScraper` creates five page tasks by default. Each worker normalizes
+   the requested location, fetches one listing, and parses its embedded
+   `__INIT__` JSON into lightweight summaries without opening detail pages.
+4. The jobs.ch coordinator preserves successful pages even if another page
+   fails. It raises `ScrapeError` only when every requested page fails, then
+   restores page order and removes duplicate source URLs.
+5. `SwissDevJobsScraper` fetches its RSS feed once, parses XML and embedded HTML,
+   applies the search and location filters locally, removes tracking parameters,
+   and returns complete jobs.
+6. Every request passes through its scraper's shared rate limiter and a
+   worker-owned retry-enabled session with configured connect/read timeouts.
+7. `scrape_sources()` records each source as completed or failed without letting
+   one source failure stop the other source.
+8. Jobs from successful sources are conservatively deduplicated using normalized
+   title, company, and location. The aggregate count describes this final list;
+   per-source counts remain the raw diagnostic counts.
+9. The API returns `completed` when all sources succeed, `partial` when at least
+   one succeeds, and HTTP 502 with a failed result only when all sources fail.
+10. Selecting an incomplete summary triggers the generic detail endpoint. For jobs.ch, JSON-LD is
+    preferred, HTML is the fallback, normalized attributes are extracted, and
+    the frontend replaces the summary with the complete job.
+11. Live-search results are not written to DynamoDB. Only explicit star/applied
+    interactions save a complete job snapshot; recent search results are cached
+    in browser `localStorage`.

@@ -10,8 +10,7 @@ from api.data.schemas import (
     MultiSourceScrapeResult,
 )
 from api.data.models import job_id
-from api.scrapers.jobs_ch import get_jobs_ch_scraper
-from api.scrapers.swiss_dev_jobs import get_swiss_dev_jobs_scraper
+from api.scrapers.registry import get_all_scrapers, get_detail_scraper, get_scraper
 from api.services.scrape_orchestration import scrape_sources
 from api.services.job_interactions import (
     list_job_interactions,
@@ -24,7 +23,7 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 @router.post("/scrape", response_model=MultiSourceScrapeResult)
 def scrape_all_sources(request: JobScrapeRequest) -> MultiSourceScrapeResult:
     result = scrape_sources(
-        [get_jobs_ch_scraper(), get_swiss_dev_jobs_scraper()],
+        get_all_scrapers(),
         request.search_term,
         request.location,
     )
@@ -33,16 +32,26 @@ def scrape_all_sources(request: JobScrapeRequest) -> MultiSourceScrapeResult:
     return result
 
 
-@router.get("/jobs-ch/{external_id}", response_model=JobRead)
-def get_jobs_ch_detail(external_id: str) -> dict:
+@router.get("/details/{source_id}/{external_id}", response_model=JobRead)
+def get_job_detail(source_id: str, external_id: str) -> dict:
+    if get_scraper(source_id) is None:
+        raise HTTPException(status_code=404, detail="Unknown job source")
+
+    scraper = get_detail_scraper(source_id)
+    if scraper is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Job source does not support detail loading",
+        )
+
     try:
-        job = get_jobs_ch_scraper().scrape_detail(external_id)
+        job = scraper.scrape_detail(external_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="jobs.ch detail request failed") from exc
+        raise HTTPException(status_code=502, detail="Job detail request failed") from exc
     if job is None:
-        raise HTTPException(status_code=404, detail="jobs.ch job not found")
+        raise HTTPException(status_code=404, detail="Job not found")
     return {
         "id": job_id(job.source_website, str(job.source_url)),
         **job.model_dump(mode="json"),

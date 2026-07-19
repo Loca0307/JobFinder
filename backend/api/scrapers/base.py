@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Protocol, runtime_checkable
 
 from api.data.schemas import NormalizedJob
 
@@ -28,6 +29,16 @@ class BaseJobScraper(ABC):
         pages: int | None = None,
     ) -> list[NormalizedJob]:
         """Return normalized jobs without persisting them."""
+
+
+@runtime_checkable
+class DetailJobScraper(Protocol):
+    """Capability implemented by sources that load a job on demand."""
+
+    source_name: str
+
+    def scrape_detail(self, external_id: str) -> NormalizedJob | None:
+        """Return a complete job for a source-specific external identifier."""
 
 
 class PaginatedJobScraper(BaseJobScraper):
