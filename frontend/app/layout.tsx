@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   description: "Swiss job search dashboard"
 };
 
+
 export default function RootLayout({
   children
 }: Readonly<{
@@ -16,6 +17,6 @@ export default function RootLayout({
       <body className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
         {children}
       </body>
-    </html>
+    </html> 
   );
 }

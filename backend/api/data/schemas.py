@@ -6,7 +6,7 @@ from typing import Any, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
-# Job instance structure saved in dynamo db 
+# Job instance structure saved in dynamo db  
 class NormalizedJob(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     company: Optional[str] = None

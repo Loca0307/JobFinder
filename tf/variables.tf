@@ -13,3 +13,13 @@ variable "jobs_table_name" {
   type    = string
   default = "Jobs"
 }
+
+variable "frontend_bucket_name" {
+  type    = string
+  default = "job-finder-static"
+}
+
+variable "frontend_cloudfront_distribution_id" {
+  type    = string
+  default = "E2U4YDALK1V35D"
+}

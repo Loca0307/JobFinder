@@ -61,30 +61,6 @@ data "aws_iam_policy_document" "github_actions_lambda_deploy" {
     resources = [aws_lambda_function.fastapi.arn]
   }
 
-  statement {
-    actions = [
-      "s3:GetBucketLocation",
-      "s3:ListBucket",
-    ]
-    effect    = "Allow"
-    resources = ["arn:aws:s3:::job-finder-static"]
-  }
-
-  statement {
-    actions = [
-      "s3:DeleteObject",
-      "s3:GetObject",
-      "s3:PutObject",
-    ]
-    effect    = "Allow"
-    resources = ["arn:aws:s3:::job-finder-static/out/*"]
-  }
-
-  statement {
-    actions   = ["cloudfront:CreateInvalidation"]
-    effect    = "Allow"
-    resources = ["arn:aws:cloudfront::637560253280:distribution/E2U4YDALK1V35D"]
-  }
 }
 
 resource "aws_iam_role_policy" "github_actions_lambda_deploy" {

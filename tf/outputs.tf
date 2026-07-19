@@ -14,6 +14,11 @@ output "jobs_table_name" {
 }
 
 output "github_actions_deploy_role_arn" {
-  description = "Store this ARN in the GitHub repository secret AWS_DEPLOY_ROLE_ARN."
+  description = "Set this ARN as the GitHub repository variable AWS_DEPLOY_ROLE_ARN."
   value       = aws_iam_role.github_actions_lambda_deploy.arn
+}
+
+output "github_actions_frontend_deploy_role_arn" {
+  description = "Set this ARN as the GitHub repository variable AWS_FRONTEND_DEPLOY_ROLE_ARN."
+  value       = aws_iam_role.github_actions_frontend_deploy.arn
 }

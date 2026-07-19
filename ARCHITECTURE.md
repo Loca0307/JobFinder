@@ -13,7 +13,7 @@
 
 - `.github/workflows/update-lambda.yaml` deploys backend-only changes pushed to `main` and also supports manual runs.
 - The workflow builds a Python 3.11 ZIP from `backend/main.py`, `backend/api/`, and `backend/requirements.txt`, matching the Lambda runtime managed in `tf/lambda.tf`, then updates the existing `JobFinder-fastapi` function.
-- GitHub Actions authenticates with short-lived AWS credentials through OIDC using the `AWS_DEPLOY_ROLE_ARN` repository secret. `tf/github_actions.tf` provisions the repository-and-branch-scoped OIDC trust plus a role limited to updating and reading the existing Lambda function.
+- GitHub Actions authenticates with short-lived AWS credentials through OIDC using the `AWS_DEPLOY_ROLE_ARN` repository variable. `tf/gh_action_backend.tf` provisions the repository-and-branch-scoped OIDC trust plus a role limited to updating and reading the existing Lambda function.
 - Terraform remains the source of truth for infrastructure and Lambda configuration. It is applied separately because this repository currently uses local Terraform state; the workflow changes Lambda code only.
 
 ## Frontend Deployment Workflow
@@ -22,7 +22,7 @@
 - GitHub Actions installs the locked frontend dependencies with Node.js 22 and runs the Next.js static export with `NEXT_PUBLIC_API_BASE_URL` supplied by a repository variable.
 - The generated `frontend/out/` contents are synchronized to the private `job-finder-static` bucket under `out/`, matching the CloudFront origin path, and obsolete objects are deleted.
 - After upload, the workflow invalidates `/*` on CloudFront distribution `E2U4YDALK1V35D` so the new static assets are served immediately.
-- `tf/github_actions.tf` grants the existing repository-scoped OIDC role access only to the frontend bucket objects, bucket listing, and this distribution's invalidations.
+- `tf/gh_action_frontend.tf` provisions a separate repository-scoped OIDC role for the frontend workflow. Its policy can list only the configured frontend bucket, manage only objects under `out/`, and create invalidations only for the configured CloudFront distribution. The workflow assumes this role through the `AWS_FRONTEND_DEPLOY_ROLE_ARN` repository variable, keeping frontend permissions separate from the Lambda deployment role.
 
 ## jobs.ch Job Scraping Foundation
 
