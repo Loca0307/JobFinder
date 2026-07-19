@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchJobInteractions, saveJobInteraction, scrapeJobs } from "@/lib/jobs";
 import type { Job, JobInteraction, ScrapeResult } from "@/types/job";
 
+const SEARCH_STORAGE_KEY = "jobfinder.live-search";
+
 export function useJobsDashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -15,6 +17,7 @@ export function useJobsDashboard() {
   const [lastRun, setLastRun] = useState<ScrapeResult | null>(null);
   const [interactions, setInteractions] = useState<Record<string, JobInteraction>>({});
   const [showingTracked, setShowingTracked] = useState(false);
+  const [searchStorageLoaded, setSearchStorageLoaded] = useState(false);
 
   async function refreshInteractions() {
     try {
@@ -28,6 +31,28 @@ export function useJobsDashboard() {
   useEffect(() => {
     void refreshInteractions();
   }, []);
+
+  useEffect(() => {
+    const savedSearch = window.localStorage.getItem(SEARCH_STORAGE_KEY);
+    if (savedSearch) {
+      try {
+        const parsed = JSON.parse(savedSearch) as { term?: string; location?: string };
+        setScrapeTerm(parsed.term ?? "");
+        setScrapeLocation(parsed.location ?? "");
+      } catch {
+        window.localStorage.removeItem(SEARCH_STORAGE_KEY);
+      }
+    }
+    setSearchStorageLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!searchStorageLoaded) return;
+    window.localStorage.setItem(
+      SEARCH_STORAGE_KEY,
+      JSON.stringify({ term: scrapeTerm, location: scrapeLocation })
+    );
+  }, [scrapeTerm, scrapeLocation, searchStorageLoaded]);
 
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedId) ?? jobs[0] ?? null,
@@ -46,6 +71,7 @@ export function useJobsDashboard() {
   }
 
   function clearAllSearches() {
+    window.localStorage.removeItem(SEARCH_STORAGE_KEY);
     setScrapeTerm("");
     setScrapeLocation("");
     setShowingTracked(false);

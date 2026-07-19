@@ -58,6 +58,7 @@
 - `frontend/app/page.tsx` presents live results from both sources and a tracked-jobs view. `frontend/hooks/useJobsDashboard.ts` owns live results, interaction state, selection, and errors.
 - `frontend/lib/jobs.ts` calls the live-search and interaction endpoints using `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000` locally.
 - Job details provide an external Apply link, a separate explicit “Mark as applied” action, and star/unstar. Opening Apply alone never writes an interaction.
+- The live-search term and location are restored from browser `localStorage` after a refresh and updated whenever either input changes. Refreshing does not automatically scrape again; the Clear button removes the stored search and resets the fields.
 
 ## Live Job Search and User Interactions
 
