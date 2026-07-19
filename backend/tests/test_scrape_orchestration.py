@@ -57,6 +57,59 @@ class ScrapeOrchestrationTests(unittest.TestCase):
         self.assertEqual(failed["source_id"], "jobs.ch")
         self.assertIn("unavailable", failed["error_message"])
 
+    def test_deduplicates_same_vacancy_across_sources(self):
+        self.jobs_ch.scrape.return_value = [
+            NormalizedJob(
+                title="Senior Python Developer",
+                company="Example AG",
+                location="Zurich",
+                source_website="jobs.ch",
+                source_url="https://jobs.ch/job/42",
+            )
+        ]
+        self.swiss_dev.scrape.return_value = [
+            NormalizedJob(
+                title=" senior  PYTHON developer ",
+                company="Example AG",
+                location="Zürich",
+                source_website="swissdevjobs.ch",
+                source_url="https://swissdevjobs.ch/jobs/example-42",
+            )
+        ]
+
+        result = self.run_sources()
+
+        self.assertEqual(result["jobs_found"], 1)
+        self.assertEqual(len(result["jobs"]), 1)
+        self.assertEqual(result["jobs"][0]["source_website"], "jobs.ch")
+        self.assertEqual(
+            {source["jobs_found"] for source in result["sources"]}, {1}
+        )
+
+    def test_keeps_same_title_and_company_in_different_locations(self):
+        self.jobs_ch.scrape.return_value = [
+            NormalizedJob(
+                title="Python Developer",
+                company="Example AG",
+                location="Bern",
+                source_website="jobs.ch",
+                source_url="https://jobs.ch/job/bern",
+            )
+        ]
+        self.swiss_dev.scrape.return_value = [
+            NormalizedJob(
+                title="Python Developer",
+                company="Example AG",
+                location="Zürich",
+                source_website="swissdevjobs.ch",
+                source_url="https://swissdevjobs.ch/jobs/zurich",
+            )
+        ]
+
+        result = self.run_sources()
+
+        self.assertEqual(result["jobs_found"], 2)
+
     def test_reports_failed_when_both_sources_fail(self):
         self.jobs_ch.scrape.side_effect = RuntimeError("first")
         self.swiss_dev.scrape.side_effect = RuntimeError("second")

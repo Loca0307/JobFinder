@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from api.data.models import job_id
+from api.data.schemas import NormalizedJob
 from api.scrapers.base import BaseJobScraper
+from api.services.location_normalization import normalize_location
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +36,9 @@ def scrape_sources(
 
     results.sort(key=lambda result: result["source_id"])
     successful = [result for result in results if result["status"] == "completed"]
-    jobs = [job for result in successful for job in result["normalized_jobs"]]
+    jobs = deduplicate_jobs(
+        [job for result in successful for job in result["normalized_jobs"]]
+    )
     for result in results:
         result.pop("normalized_jobs")
     status = "completed" if len(successful) == len(results) else "partial"
@@ -41,7 +47,7 @@ def scrape_sources(
 
     return {
         "status": status,
-        "jobs_found": sum(result["jobs_found"] for result in results),
+        "jobs_found": len(jobs),
         "jobs": [
             {
                 "id": job_id(job.source_website, str(job.source_url)),
@@ -51,6 +57,45 @@ def scrape_sources(
         ],
         "sources": results,
     }
+
+
+def deduplicate_jobs(jobs: list[NormalizedJob]) -> list[NormalizedJob]:
+    """Deduplicate the final multi-source list by normalized vacancy identity."""
+    unique_jobs: list[NormalizedJob] = []
+    seen_vacancies: set[tuple[str, str, str]] = set()
+
+    for job in jobs:
+        fingerprint = _vacancy_fingerprint(job)
+        if fingerprint is not None and fingerprint in seen_vacancies:
+            logger.info(
+                "Dropped duplicate vacancy from %s: %s at %s",
+                job.source_website,
+                job.title,
+                job.company,
+            )
+            continue
+        if fingerprint is not None:
+            seen_vacancies.add(fingerprint)
+        unique_jobs.append(job)
+
+    return unique_jobs
+
+
+def _vacancy_fingerprint(job: NormalizedJob) -> tuple[str, str, str] | None:
+    """Return a conservative cross-board identity for a normalized job."""
+    title = _identity_text(job.title)
+    company = _identity_text(job.company)
+    location = _identity_text(normalize_location(job.location))
+    if not title or not company or not location:
+        return None
+    return title, company, location
+
+
+def _identity_text(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    return " ".join(re.findall(r"\w+", normalized))
 
 
 def _scrape_source(
