@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     scraper_max_workers: int = Field(
         default=5, ge=1, alias="SCRAPER_MAX_WORKERS"
     )
+    scraper_source_max_workers: int = Field(
+        default=3, ge=1, alias="SCRAPER_SOURCE_MAX_WORKERS"
+    )
     scraper_requests_per_second: float = Field(
         default=2, ge=0, alias="SCRAPER_REQUESTS_PER_SECOND"
     )

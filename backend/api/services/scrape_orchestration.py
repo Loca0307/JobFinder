@@ -10,6 +10,7 @@ from api.data.models import job_id
 from api.data.schemas import NormalizedJob
 from api.scrapers.base import BaseJobScraper
 from api.services.location_normalization import normalize_location
+from api.settings.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,8 @@ def scrape_sources(
     pages_by_source: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     pages_by_source = pages_by_source or {}
-    with ThreadPoolExecutor(max_workers=len(scrapers)) as executor:
+    source_workers = min(get_settings().scraper_source_max_workers, len(scrapers))
+    with ThreadPoolExecutor(max_workers=source_workers) as executor:
         tasks = {
             executor.submit(
                 _scrape_source,

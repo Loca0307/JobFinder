@@ -1,4 +1,5 @@
 import unittest
+import threading
 from unittest.mock import Mock, patch
 
 from api.data.schemas import NormalizedJob
@@ -132,6 +133,43 @@ class ScrapeOrchestrationTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.jobs_ch.scrape.assert_called_once_with("python", "Zürich", 5)
         self.swiss_dev.scrape.assert_called_once_with("python", "Zürich", 1)
+
+    def test_limits_concurrent_sources_to_three(self):
+        lock = threading.Lock()
+        barrier = threading.Barrier(3, timeout=2)
+        active = 0
+        maximum_active = 0
+
+        def scrape(*args):
+            nonlocal active, maximum_active
+            with lock:
+                active += 1
+                maximum_active = max(maximum_active, active)
+            barrier.wait()
+            with lock:
+                active -= 1
+            return []
+
+        scrapers = []
+        for index in range(6):
+            scraper = Mock(
+                source_name=f"source-{index}",
+                base_url=f"https://source-{index}.test",
+                default_pages=1,
+            )
+            scraper.scrape.side_effect = scrape
+            scrapers.append(scraper)
+
+        settings = Mock(scraper_source_max_workers=3)
+        with patch(
+            "api.services.scrape_orchestration.get_settings",
+            return_value=settings,
+        ):
+            result = scrape_sources(scrapers, "python", "Zürich")
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(maximum_active, 3)
+        self.assertTrue(all(scraper.scrape.call_count == 1 for scraper in scrapers))
 
 
 if __name__ == "__main__":
