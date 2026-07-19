@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { fetchJobInteractions, saveJobInteraction, scrapeJobs } from "@/lib/jobs";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { fetchJobInteractions, fetchJobsChDetail, saveJobInteraction, scrapeJobs } from "@/lib/jobs";
 import type { Job, JobInteraction, ScrapeResult } from "@/types/job";
 
 const SEARCH_STORAGE_KEY = "jobfinder.live-search";
@@ -14,11 +14,13 @@ export function useJobsDashboard() {
   const [scrapeLocation, setScrapeLocation] = useState("");
   const [isScraping, setIsScraping] = useState(false);
   const [savingJobId, setSavingJobId] = useState<string | null>(null);
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<ScrapeResult | null>(null);
   const [interactions, setInteractions] = useState<Record<string, JobInteraction>>({});
   const [showingStarred, setShowingStarred] = useState(false);
   const [searchStorageLoaded, setSearchStorageLoaded] = useState(false);
+  const requestedDetailIds = useRef(new Set<string>());
 
   async function refreshInteractions() {
     try {
@@ -69,6 +71,30 @@ export function useJobsDashboard() {
     () => jobs.find((job) => job.id === selectedId) ?? jobs[0] ?? null,
     [jobs, selectedId]
   );
+
+  useEffect(() => {
+    if (
+      selectedJob?.source_website !== "jobs.ch" ||
+      selectedJob.details_loaded !== false ||
+      !selectedJob.external_id ||
+      requestedDetailIds.current.has(selectedJob.id)
+    ) {
+      return;
+    }
+
+    requestedDetailIds.current.add(selectedJob.id);
+    setLoadingDetailId(selectedJob.id);
+    void fetchJobsChDetail(selectedJob.external_id)
+      .then((detail) => {
+        setJobs((current) => current.map((job) => job.id === detail.id ? detail : job));
+        setLiveJobs((current) => current.map((job) => job.id === detail.id ? detail : job));
+      })
+      .catch((err) => {
+        requestedDetailIds.current.delete(selectedJob.id);
+        setError(err instanceof Error ? err.message : "Failed to load job details");
+      })
+      .finally(() => setLoadingDetailId(null));
+  }, [selectedJob]);
 
   function showJobs(nextJobs: Job[]) {
     setJobs(nextJobs);
@@ -161,6 +187,7 @@ export function useJobsDashboard() {
     setScrapeLocation,
     isScraping,
     savingJobId,
+    loadingDetailId,
     error,
     lastRun,
     interactions,

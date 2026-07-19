@@ -25,6 +25,7 @@ class NormalizedJob(BaseModel):
     scrape_timestamp: datetime = Field(default_factory=datetime.utcnow)
     external_id: Optional[str] = None
     raw_payload: Optional[dict[str, Any]] = None
+    details_loaded: bool = True
 
 
 # Structure for API responses received by agents
@@ -47,6 +48,7 @@ class JobRead(BaseModel):
     scrape_timestamp: Optional[datetime] = None
     external_id: Optional[str] = None
     raw_payload: Optional[dict[str, Any]] = None
+    details_loaded: bool = True
 
 # Parameters for requests sent by agent to scrape jobs
 class JobScrapeRequest(BaseModel):

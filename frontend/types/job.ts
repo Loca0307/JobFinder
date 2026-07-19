@@ -17,6 +17,7 @@ export type Job = {
   scrape_timestamp?: string | null;
   external_id?: string | null;
   raw_payload?: Record<string, unknown> | null;
+  details_loaded?: boolean;
 };
 
 export type JobScrapeRequest = {

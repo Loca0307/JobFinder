@@ -6,8 +6,6 @@ import re
 from datetime import datetime
 from functools import lru_cache
 from typing import Any
-from urllib.parse import urljoin
-
 import requests
 
 from api.settings.config import get_settings
@@ -65,20 +63,7 @@ class JobsChScraper(PaginatedJobScraper):
                 )
                 return page, jobs
 
-            detail_urls = self._extract_detail_urls(response.text)
-            for detail_url in detail_urls:
-                try:
-                    job = self._scrape_detail(detail_url, client)
-                except Exception:
-                    logger.exception(
-                        "jobs.ch detail scrape failed on page %s for %s",
-                        page,
-                        detail_url,
-                    )
-                    continue
-
-                if job is not None:
-                    jobs.append(job)
+            jobs = self._extract_listing_jobs(response.text)
 
         return page, jobs
 
@@ -97,25 +82,48 @@ class JobsChScraper(PaginatedJobScraper):
         query = "&".join(params)
         return f"{self.base_url}/en/vacancies/{'?' + query if query else ''}"
 
-    # Extract urls for job listing pages
-    def _extract_detail_urls(self, html: str) -> list[str]:
-        soup = _beautiful_soup(html)
-        urls: list[str] = []
-        patterns = (
-            "/en/vacancies/detail/",
-            "/de/stellenangebote/detail/",
-            "/fr/offres-emplois/detail/",
-            "/it/offerte-lavoro/detail/",
-        )
+    def _extract_listing_jobs(self, html: str) -> list[NormalizedJob]:
+        marker = re.search(r"__INIT__\s*=\s*", html)
+        if marker is None:
+            return []
 
-        for anchor in soup.find_all("a", href=True):
-            href = str(anchor["href"])
-            if any(pattern in href for pattern in patterns):
-                clean_url = urljoin(self.base_url, href.split("?")[0])
-                if clean_url not in urls:
-                    urls.append(clean_url)
+        try:
+            state, _ = json.JSONDecoder().raw_decode(html, marker.end())
+            results = state["vacancy"]["results"]["main"]["results"]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            return []
 
-        return urls
+        jobs: list[NormalizedJob] = []
+        for summary in results:
+            external_id = summary.get("id")
+            title = summary.get("title")
+            if not external_id or not title:
+                continue
+
+            url = f"{self.base_url}/en/vacancies/detail/{external_id}/"
+            company = summary.get("company") or {}
+            jobs.append(
+                NormalizedJob(
+                    title=title,
+                    company=company.get("name") if isinstance(company, dict) else None,
+                    location=summary.get("place"),
+                    source_website=self.source_name,
+                    source_url=url,
+                    apply_url=url,
+                    posting_date=self._parse_datetime(summary.get("publicationDate")),
+                    external_id=external_id,
+                    raw_payload={"parser": "listing_summary"},
+                    details_loaded=False,
+                )
+            )
+        return jobs
+
+    def scrape_detail(self, external_id: str) -> NormalizedJob | None:
+        if re.fullmatch(r"[A-Za-z0-9-]+", external_id) is None:
+            raise ValueError("Invalid jobs.ch job ID")
+        url = f"{self.base_url}/en/vacancies/detail/{external_id}/"
+        with self._create_http_client() as client:
+            return self._scrape_detail(url, client)
 
     # Extract a single normalizesJob from the url
     def _scrape_detail(

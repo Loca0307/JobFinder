@@ -71,6 +71,7 @@ export default function Home() {
           job={dashboard.selectedJob}
           interaction={dashboard.selectedJob ? dashboard.interactions[dashboard.selectedJob.id] : undefined}
           isSaving={dashboard.savingJobId === dashboard.selectedJob?.id}
+          isLoadingDetail={dashboard.loadingDetailId === dashboard.selectedJob?.id}
           onToggleStar={dashboard.toggleStar}
           onMarkApplied={dashboard.markApplied}
         />

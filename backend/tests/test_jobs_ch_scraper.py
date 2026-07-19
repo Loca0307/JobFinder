@@ -35,25 +35,35 @@ class JobsChScraperTests(unittest.TestCase):
             "https://www.jobs.ch/en/vacancies/",
         )
 
-    def test_extract_detail_urls_supports_languages_cleans_and_deduplicates(self):
-        html = """
-        <main>
-          <a href="/en/vacancies/detail/example-id/?ref=first">First</a>
-          <a href="/en/vacancies/detail/example-id/?ref=duplicate">Duplicate</a>
-          <a href="https://www.jobs.ch/de/stellenangebote/detail/zweite-id/">Second</a>
-          <a href="/fr/offres-emplois/detail/troisieme-id/?source=list">Third</a>
-          <a href="/en/vacancies/?page=2">Pagination, not a job</a>
-        </main>
-        """
+    def test_extract_listing_jobs_returns_incomplete_summaries(self):
+        state = {
+            "vacancy": {
+                "results": {
+                    "main": {
+                        "results": [
+                            {
+                                "id": "job-42",
+                                "title": "Python Developer",
+                                "company": {"name": "Example AG"},
+                                "place": "Zürich",
+                                "publicationDate": "2026-07-10T08:30:00Z",
+                            }
+                        ]
+                    }
+                }
+            }
+        }
 
-        self.assertEqual(
-            self.scraper._extract_detail_urls(html),
-            [
-                "https://www.jobs.ch/en/vacancies/detail/example-id/",
-                "https://www.jobs.ch/de/stellenangebote/detail/zweite-id/",
-                "https://www.jobs.ch/fr/offres-emplois/detail/troisieme-id/",
-            ],
+        jobs = self.scraper._extract_listing_jobs(
+            f"<script>__INIT__ = {json.dumps(state)};</script>"
         )
+
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0].title, "Python Developer")
+        self.assertEqual(jobs[0].company, "Example AG")
+        self.assertEqual(jobs[0].location, "Zürich")
+        self.assertEqual(jobs[0].external_id, "job-42")
+        self.assertFalse(jobs[0].details_loaded)
 
     def test_extract_job_posting_json_skips_malformed_scripts(self):
         valid_payload = {"@type": "JobPosting", "title": "Backend Engineer"}
@@ -140,7 +150,7 @@ class JobsChScraperTests(unittest.TestCase):
         self.assertEqual(job.required_languages, ["English"])
         self.assertEqual(job.raw_payload, {"parser": "html_fallback"})
 
-    def test_scrape_page_isolates_detail_failures(self):
+    def test_scrape_page_does_not_fetch_job_details(self):
         listing_response = Mock()
         listing_response.text = "<html></html>"
         listing_response.raise_for_status.return_value = None
@@ -148,30 +158,38 @@ class JobsChScraperTests(unittest.TestCase):
         client.__enter__.return_value = client
         client.get.return_value = listing_response
 
-        first_job = Mock()
+        summary_job = Mock()
         with (
             patch.object(self.scraper, "_create_http_client", return_value=client),
             patch.object(
                 self.scraper,
-                "_extract_detail_urls",
-                return_value=[
-                    "https://example.test/job/1",
-                    "https://example.test/job/2",
-                ],
-            ),
-            patch.object(
-                self.scraper,
-                "_scrape_detail",
-                side_effect=[first_job, requests.Timeout("slow detail")],
-            ) as scrape_detail,
+                "_extract_listing_jobs",
+                return_value=[summary_job],
+            ) as extract_summaries,
         ):
             page, jobs = self.scraper._scrape_page(None, None, 2)
 
         self.assertEqual(page, 2)
-        self.assertEqual(jobs, [first_job])
-        self.assertEqual(scrape_detail.call_count, 2)
-        self.assertTrue(all(call.args[1] is client for call in scrape_detail.call_args_list))
+        self.assertEqual(jobs, [summary_job])
+        extract_summaries.assert_called_once_with(listing_response.text)
+        client.get.assert_called_once()
         client.__exit__.assert_called_once()
+
+    def test_public_detail_method_builds_url_and_reuses_parser(self):
+        client = MagicMock()
+        client.__enter__.return_value = client
+        detailed_job = Mock()
+
+        with (
+            patch.object(self.scraper, "_create_http_client", return_value=client),
+            patch.object(self.scraper, "_scrape_detail", return_value=detailed_job) as scrape,
+        ):
+            result = self.scraper.scrape_detail("job-42")
+
+        self.assertIs(result, detailed_job)
+        scrape.assert_called_once_with(
+            "https://www.jobs.ch/en/vacancies/detail/job-42/", client
+        )
 
     def test_scrape_page_returns_empty_result_after_listing_failure(self):
         client = MagicMock()

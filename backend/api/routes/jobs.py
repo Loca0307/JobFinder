@@ -5,9 +5,11 @@ from fastapi import APIRouter, HTTPException
 from api.data.schemas import (
     JobInteractionRead,
     JobInteractionWrite,
+    JobRead,
     JobScrapeRequest,
     MultiSourceScrapeResult,
 )
+from api.data.models import job_id
 from api.scrapers.jobs_ch import get_jobs_ch_scraper
 from api.scrapers.swiss_dev_jobs import get_swiss_dev_jobs_scraper
 from api.services.scrape_orchestration import scrape_sources
@@ -35,6 +37,22 @@ def scrape_all_sources(request: JobScrapeRequest) -> MultiSourceScrapeResult:
     if result["status"] == "failed":
         raise HTTPException(status_code=502, detail=result)
     return result
+
+
+@router.get("/jobs-ch/{external_id}", response_model=JobRead)
+def get_jobs_ch_detail(external_id: str) -> dict:
+    try:
+        job = get_jobs_ch_scraper().scrape_detail(external_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="jobs.ch detail request failed") from exc
+    if job is None:
+        raise HTTPException(status_code=404, detail="jobs.ch job not found")
+    return {
+        "id": job_id(job.source_website, str(job.source_url)),
+        **job.model_dump(mode="json"),
+    }
 
 
 @router.get("/interactions", response_model=list[JobInteractionRead])
