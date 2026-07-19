@@ -8,6 +8,7 @@ const SEARCH_STORAGE_KEY = "jobfinder.live-search";
 
 export function useJobsDashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [liveJobs, setLiveJobs] = useState<Job[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scrapeTerm, setScrapeTerm] = useState("");
   const [scrapeLocation, setScrapeLocation] = useState("");
@@ -16,7 +17,7 @@ export function useJobsDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<ScrapeResult | null>(null);
   const [interactions, setInteractions] = useState<Record<string, JobInteraction>>({});
-  const [showingTracked, setShowingTracked] = useState(false);
+  const [showingStarred, setShowingStarred] = useState(false);
   const [searchStorageLoaded, setSearchStorageLoaded] = useState(false);
 
   async function refreshInteractions() {
@@ -36,9 +37,15 @@ export function useJobsDashboard() {
     const savedSearch = window.localStorage.getItem(SEARCH_STORAGE_KEY);
     if (savedSearch) {
       try {
-        const parsed = JSON.parse(savedSearch) as { term?: string; location?: string };
+        const parsed = JSON.parse(savedSearch) as {
+          term?: string;
+          location?: string;
+          jobs?: Job[];
+        };
         setScrapeTerm(parsed.term ?? "");
         setScrapeLocation(parsed.location ?? "");
+        setLiveJobs(parsed.jobs ?? []);
+        showJobs(parsed.jobs ?? []);
       } catch {
         window.localStorage.removeItem(SEARCH_STORAGE_KEY);
       }
@@ -48,11 +55,15 @@ export function useJobsDashboard() {
 
   useEffect(() => {
     if (!searchStorageLoaded) return;
-    window.localStorage.setItem(
-      SEARCH_STORAGE_KEY,
-      JSON.stringify({ term: scrapeTerm, location: scrapeLocation })
-    );
-  }, [scrapeTerm, scrapeLocation, searchStorageLoaded]);
+    try {
+      window.localStorage.setItem(
+        SEARCH_STORAGE_KEY,
+        JSON.stringify({ term: scrapeTerm, location: scrapeLocation, jobs: liveJobs })
+      );
+    } catch {
+      setError("The browser could not save these search results locally.");
+    }
+  }, [scrapeTerm, scrapeLocation, liveJobs, searchStorageLoaded]);
 
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedId) ?? jobs[0] ?? null,
@@ -74,7 +85,8 @@ export function useJobsDashboard() {
     window.localStorage.removeItem(SEARCH_STORAGE_KEY);
     setScrapeTerm("");
     setScrapeLocation("");
-    setShowingTracked(false);
+    setLiveJobs([]);
+    setShowingStarred(false);
     clearResults();
   }
 
@@ -87,7 +99,8 @@ export function useJobsDashboard() {
         location: scrapeLocation.trim() || undefined
       });
       setLastRun(run);
-      setShowingTracked(false);
+      setShowingStarred(false);
+      setLiveJobs(run.jobs);
       showJobs(run.jobs);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Job search failed");
@@ -96,10 +109,14 @@ export function useJobsDashboard() {
     }
   }
 
-  function showTrackedJobs() {
+  function showStarredJobs() {
     setLastRun(null);
-    setShowingTracked(true);
-    showJobs(Object.values(interactions).map((interaction) => interaction.job));
+    setShowingStarred(true);
+    showJobs(
+      Object.values(interactions)
+        .filter((interaction) => interaction.starred)
+        .map((interaction) => interaction.job)
+    );
   }
 
   async function updateInteraction(job: Job, starred: boolean, applied: boolean) {
@@ -113,7 +130,7 @@ export function useJobsDashboard() {
         else delete next[job.id];
         return next;
       });
-      if (showingTracked && !saved) {
+      if (showingStarred && !saved?.starred) {
         showJobs(jobs.filter((candidate) => candidate.id !== job.id));
       }
     } catch (err) {
@@ -147,10 +164,11 @@ export function useJobsDashboard() {
     error,
     lastRun,
     interactions,
-    trackedJobCount: Object.keys(interactions).length,
-    showingTracked,
+    jobsFoundCount: liveJobs.length,
+    starredJobCount: Object.values(interactions).filter((interaction) => interaction.starred).length,
+    showingStarred,
     searchJobs,
-    showTrackedJobs,
+    showStarredJobs,
     toggleStar,
     markApplied,
     clearAllSearches

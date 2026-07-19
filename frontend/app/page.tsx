@@ -17,16 +17,16 @@ export default function Home() {
         </div>
         <div className="flex gap-2">
           <div className="min-w-24 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
-            <span className="block text-xl font-extrabold">{dashboard.jobs.length}</span>
+            <span className="block text-xl font-extrabold">🔍 {dashboard.jobsFoundCount}</span>
             <small className="text-slate-500">jobs found</small>
           </div>
           <button
             type="button"
-            onClick={dashboard.showTrackedJobs}
+            onClick={dashboard.showStarredJobs}
             className="min-w-24 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm hover:bg-slate-50"
           >
-            <span className="block text-xl font-extrabold">{dashboard.trackedJobCount}</span>
-            <small className="text-slate-500">tracked jobs</small>
+            <span className="block text-xl font-extrabold">★ {dashboard.starredJobCount}</span>
+            <small className="text-slate-500">starred jobs</small>
           </button>
           <button
             type="button"
@@ -53,8 +53,8 @@ export default function Home() {
         </p>
       ) : null}
 
-      {dashboard.showingTracked ? (
-        <p className="mb-5 rounded-lg bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700">Showing starred and applied jobs.</p>
+      {dashboard.showingStarred ? (
+        <p className="mb-5 rounded-lg bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700">Showing starred jobs.</p>
       ) : null}
 
       {dashboard.error ? (

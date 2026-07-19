@@ -55,10 +55,10 @@
 ## Jobs Frontend MVP
 
 - The frontend lives in `frontend/` and uses Next.js with React and TypeScript.
-- `frontend/app/page.tsx` presents live results from both sources and a tracked-jobs view. `frontend/hooks/useJobsDashboard.ts` owns live results, interaction state, selection, and errors.
+- `frontend/app/page.tsx` presents live results from both sources and a starred-jobs view. `frontend/hooks/useJobsDashboard.ts` owns live results, interaction state, selection, and errors.
 - `frontend/lib/jobs.ts` calls the live-search and interaction endpoints using `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000` locally.
 - Job details provide an external Apply link, a separate explicit “Mark as applied” action, and star/unstar. Opening Apply alone never writes an interaction.
-- The live-search term and location are restored from browser `localStorage` after a refresh and updated whenever either input changes. Refreshing does not automatically scrape again; the Clear button removes the stored search and resets the fields.
+- The live-search term, location, and most recent result list are restored from browser `localStorage` after a refresh. Refreshing displays the cached jobs without scraping again; a new search replaces the cache, and the Clear button removes the stored search and results.
 
 ## Live Job Search and User Interactions
 
