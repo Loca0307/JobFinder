@@ -3,7 +3,6 @@
 import { JobDetails } from "@/components/jobs/JobDetails";
 import { JobList } from "@/components/jobs/JobList";
 import { ScrapeSearchForm } from "@/components/jobs/ScrapeSearchForm";
-import { StoredJobsSearchForm } from "@/components/jobs/StoredJobsSearchForm";
 import { useJobsDashboard } from "@/hooks/useJobsDashboard";
 
 export default function Home() {
@@ -21,10 +20,14 @@ export default function Home() {
             <span className="block text-xl font-extrabold">{dashboard.jobs.length}</span>
             <small className="text-slate-500">jobs found</small>
           </div>
-          <div className="min-w-24 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
-            <span className="block text-xl font-extrabold">{dashboard.storedJobCount}</span>
-            <small className="text-slate-500">stored in DB</small>
-          </div>
+          <button
+            type="button"
+            onClick={dashboard.showTrackedJobs}
+            className="min-w-24 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm hover:bg-slate-50"
+          >
+            <span className="block text-xl font-extrabold">{dashboard.trackedJobCount}</span>
+            <small className="text-slate-500">tracked jobs</small>
+          </button>
           <button
             type="button"
             onClick={dashboard.clearAllSearches}
@@ -46,19 +49,13 @@ export default function Home() {
 
       {dashboard.lastRun ? (
         <p className="mt-3 rounded-lg bg-teal-50 px-4 py-3 text-sm font-medium text-teal-800" role="status">
-          Scrape complete: {dashboard.lastRun.jobs_found} found, {dashboard.lastRun.jobs_created} new and{" "}
-          {dashboard.lastRun.jobs_updated} updated.
+          Live search complete: {dashboard.lastRun.jobs_found} jobs found.
         </p>
       ) : null}
 
-      <StoredJobsSearchForm
-        term={dashboard.storedTerm}
-        location={dashboard.storedLocation}
-        isLoading={dashboard.isSearchingStored}
-        onTermChange={dashboard.setStoredTerm}
-        onLocationChange={dashboard.setStoredLocation}
-        onSubmit={dashboard.searchStoredJobs}
-      />
+      {dashboard.showingTracked ? (
+        <p className="mb-5 rounded-lg bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700">Showing starred and applied jobs.</p>
+      ) : null}
 
       {dashboard.error ? (
         <p className="my-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{dashboard.error}</p>
@@ -70,7 +67,13 @@ export default function Home() {
           selectedId={dashboard.selectedJob?.id ?? null}
           onSelect={dashboard.setSelectedId}
         />
-        <JobDetails job={dashboard.selectedJob} />
+        <JobDetails
+          job={dashboard.selectedJob}
+          interaction={dashboard.selectedJob ? dashboard.interactions[dashboard.selectedJob.id] : undefined}
+          isSaving={dashboard.savingJobId === dashboard.selectedJob?.id}
+          onToggleStar={dashboard.toggleStar}
+          onMarkApplied={dashboard.markApplied}
+        />
       </section>
     </main>
   );

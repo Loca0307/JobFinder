@@ -1,32 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchJobCount, fetchJobs, scrapeJobs } from "@/lib/jobs";
-import type { Job, ScrapeRun } from "@/types/job";
+import { fetchJobInteractions, saveJobInteraction, scrapeJobs } from "@/lib/jobs";
+import type { Job, JobInteraction, ScrapeResult } from "@/types/job";
 
 export function useJobsDashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scrapeTerm, setScrapeTerm] = useState("");
   const [scrapeLocation, setScrapeLocation] = useState("");
-  const [storedTerm, setStoredTerm] = useState("");
-  const [storedLocation, setStoredLocation] = useState("");
   const [isScraping, setIsScraping] = useState(false);
-  const [isSearchingStored, setIsSearchingStored] = useState(false);
+  const [savingJobId, setSavingJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [lastRun, setLastRun] = useState<ScrapeRun | null>(null);
-  const [storedJobCount, setStoredJobCount] = useState(0);
+  const [lastRun, setLastRun] = useState<ScrapeResult | null>(null);
+  const [interactions, setInteractions] = useState<Record<string, JobInteraction>>({});
+  const [showingTracked, setShowingTracked] = useState(false);
 
-  async function refreshStoredJobCount() {
+  async function refreshInteractions() {
     try {
-      setStoredJobCount(await fetchJobCount());
+      const tracked = await fetchJobInteractions();
+      setInteractions(Object.fromEntries(tracked.map((interaction) => [interaction.job.id, interaction])));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load job count");
+      setError(err instanceof Error ? err.message : "Failed to load tracked jobs");
     }
   }
 
   useEffect(() => {
-    void refreshStoredJobCount();
+    void refreshInteractions();
   }, []);
 
   const selectedJob = useMemo(
@@ -48,8 +48,7 @@ export function useJobsDashboard() {
   function clearAllSearches() {
     setScrapeTerm("");
     setScrapeLocation("");
-    setStoredTerm("");
-    setStoredLocation("");
+    setShowingTracked(false);
     clearResults();
   }
 
@@ -62,8 +61,8 @@ export function useJobsDashboard() {
         location: scrapeLocation.trim() || undefined
       });
       setLastRun(run);
+      setShowingTracked(false);
       showJobs(run.jobs);
-      await refreshStoredJobCount();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Job search failed");
     } finally {
@@ -71,18 +70,41 @@ export function useJobsDashboard() {
     }
   }
 
-  async function searchStoredJobs() {
-    setIsSearchingStored(true);
+  function showTrackedJobs() {
+    setLastRun(null);
+    setShowingTracked(true);
+    showJobs(Object.values(interactions).map((interaction) => interaction.job));
+  }
+
+  async function updateInteraction(job: Job, starred: boolean, applied: boolean) {
+    setSavingJobId(job.id);
     setError(null);
     try {
-      const matches = await fetchJobs(100, storedTerm, storedLocation);
-      setLastRun(null);
-      showJobs(matches);
+      const saved = await saveJobInteraction(job, starred, applied);
+      setInteractions((current) => {
+        const next = { ...current };
+        if (saved) next[job.id] = saved;
+        else delete next[job.id];
+        return next;
+      });
+      if (showingTracked && !saved) {
+        showJobs(jobs.filter((candidate) => candidate.id !== job.id));
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Stored job search failed");
+      setError(err instanceof Error ? err.message : "Failed to update tracked job");
     } finally {
-      setIsSearchingStored(false);
+      setSavingJobId(null);
     }
+  }
+
+  function toggleStar(job: Job) {
+    const current = interactions[job.id];
+    return updateInteraction(job, !current?.starred, current?.applied ?? false);
+  }
+
+  function markApplied(job: Job) {
+    const current = interactions[job.id];
+    return updateInteraction(job, current?.starred ?? false, true);
   }
 
   return {
@@ -94,17 +116,17 @@ export function useJobsDashboard() {
     setScrapeTerm,
     scrapeLocation,
     setScrapeLocation,
-    storedTerm,
-    setStoredTerm,
-    storedLocation,
-    setStoredLocation,
     isScraping,
-    isSearchingStored,
+    savingJobId,
     error,
     lastRun,
-    storedJobCount,
+    interactions,
+    trackedJobCount: Object.keys(interactions).length,
+    showingTracked,
     searchJobs,
-    searchStoredJobs,
+    showTrackedJobs,
+    toggleStar,
+    markApplied,
     clearAllSearches
   };
 }

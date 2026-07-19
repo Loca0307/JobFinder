@@ -8,11 +8,15 @@ export type Job = {
   seniority?: string | null;
   employment_type?: string | null;
   remote_type?: string | null;
+  salary?: string | null;
   required_languages?: string[];
   source_website?: string | null;
   source_url?: string | null;
   apply_url?: string | null;
   posting_date?: string | null;
+  scrape_timestamp?: string | null;
+  external_id?: string | null;
+  raw_payload?: Record<string, unknown> | null;
 };
 
 export type JobScrapeRequest = {
@@ -20,18 +24,23 @@ export type JobScrapeRequest = {
   location?: string;
 };
 
-export type ScrapeRun = {
+export type ScrapeResult = {
   status: string;
   jobs_found: number;
-  jobs_created: number;
-  jobs_updated: number;
   jobs: Job[];
   sources: Array<{
     source_id: string;
     status: string;
     jobs_found: number;
-    jobs_created: number;
-    jobs_updated: number;
     error_message?: string | null;
   }>;
+};
+
+export type JobInteraction = {
+  job: Job;
+  starred: boolean;
+  applied: boolean;
+  applied_at?: string | null;
+  created_at: string;
+  updated_at: string;
 };

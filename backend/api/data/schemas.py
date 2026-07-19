@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 
 
-# Job instance structure saved in dynamo db  
+# Normalized job returned by every scraper
 class NormalizedJob(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     company: Optional[str] = None
@@ -38,11 +38,15 @@ class JobRead(BaseModel):
     seniority: Optional[str] = None
     employment_type: Optional[str] = None
     remote_type: Optional[str] = None
+    salary: Optional[str] = None
     required_languages: List[str] = Field(default_factory=list)
     source_website: Optional[str] = None
     source_url: Optional[str] = None
     apply_url: Optional[str] = None
     posting_date: Optional[datetime] = None
+    scrape_timestamp: Optional[datetime] = None
+    external_id: Optional[str] = None
+    raw_payload: Optional[dict[str, Any]] = None
 
 # Parameters for requests sent by agent to scrape jobs
 class JobScrapeRequest(BaseModel):
@@ -50,28 +54,9 @@ class JobScrapeRequest(BaseModel):
     location: Optional[str] = Field(default=None, max_length=255)
 
 
-# Counts shared by single-source and multi-source scrape responses
 class ScrapeSummary(BaseModel):
     status: str
     jobs_found: int
-    jobs_created: int
-    jobs_updated: int
-
-
-# Complete persisted scrape-run record returned by the legacy jobs.ch endpoint
-class ScrapeRunRead(ScrapeSummary):
-    id: str
-    source_id: str
-    search_term: Optional[str]
-    location: Optional[str]
-    pages_requested: int
-    job_ids: List[str] = Field(default_factory=list)
-    jobs: List[JobRead] = Field(default_factory=list)
-    error_message: Optional[str]
-    started_at: datetime
-    finished_at: Optional[datetime]
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 class SourceScrapeResult(ScrapeSummary):
@@ -82,3 +67,15 @@ class SourceScrapeResult(ScrapeSummary):
 class MultiSourceScrapeResult(ScrapeSummary):
     jobs: List[JobRead] = Field(default_factory=list)
     sources: List[SourceScrapeResult] = Field(default_factory=list)
+
+
+class JobInteractionWrite(BaseModel):
+    job: JobRead
+    starred: bool = False
+    applied: bool = False
+
+
+class JobInteractionRead(JobInteractionWrite):
+    applied_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime

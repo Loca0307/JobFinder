@@ -1,16 +1,13 @@
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from api.data.models import job_id
 from api.scrapers.base import BaseJobScraper
-from api.services.job_ingestion import (
-    finish_scrape_run,
-    get_or_create_source,
-    start_scrape_run,
-    upsert_jobs,
-)
+
+logger = logging.getLogger(__name__)
 
 
 def scrape_sources(
@@ -44,8 +41,6 @@ def scrape_sources(
     return {
         "status": status,
         "jobs_found": sum(result["jobs_found"] for result in results),
-        "jobs_created": sum(result["jobs_created"] for result in results),
-        "jobs_updated": sum(result["jobs_updated"] for result in results),
         "jobs": [
             {
                 "id": job_id(job.source_website, str(job.source_url)),
@@ -63,45 +58,26 @@ def _scrape_source(
     location: str | None,
     pages: int,
 ) -> dict[str, Any]:
-    run = None
     try:
-        get_or_create_source(scraper.source_name, scraper.base_url)
-        run = start_scrape_run(scraper.source_name, search_term, location, pages)
         jobs = scraper.scrape(search_term, location, pages)
-        created, updated = upsert_jobs(jobs)
-        finished = finish_scrape_run(
-            run,
-            status="completed",
-            jobs_found=len(jobs),
-            jobs_created=created,
-            jobs_updated=updated,
-            job_ids=[job_id(job.source_website, str(job.source_url)) for job in jobs],
+        logger.info(
+            "Live scrape completed for %s with %s jobs",
+            scraper.source_name,
+            len(jobs),
         )
         return {
-            "source_id": finished["source_id"],
-            "status": finished["status"],
-            "jobs_found": finished["jobs_found"],
-            "jobs_created": finished["jobs_created"],
-            "jobs_updated": finished["jobs_updated"],
-            "error_message": finished.get("error_message"),
+            "source_id": scraper.source_name.lower(),
+            "status": "completed",
+            "jobs_found": len(jobs),
+            "error_message": None,
             "normalized_jobs": jobs,
         }
     except Exception as exc:
-        if run is not None:
-            finish_scrape_run(
-                run,
-                status="failed",
-                jobs_found=0,
-                jobs_created=0,
-                jobs_updated=0,
-                error_message=str(exc),
-            )
+        logger.exception("Live scrape failed for %s", scraper.source_name)
         return {
             "source_id": scraper.source_name.lower(),
             "status": "failed",
             "jobs_found": 0,
-            "jobs_created": 0,
-            "jobs_updated": 0,
             "error_message": str(exc),
             "normalized_jobs": [],
         }

@@ -1,4 +1,4 @@
-import type { Job } from "@/types/job";
+import type { Job, JobInteraction } from "@/types/job";
 
 function valueOrFallback(value?: string | null) {
   return value?.trim() || "Not specified";
@@ -15,7 +15,15 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
-export function JobDetails({ job }: { job: Job | null }) {
+type Props = {
+  job: Job | null;
+  interaction?: JobInteraction;
+  isSaving: boolean;
+  onToggleStar: (job: Job) => void;
+  onMarkApplied: (job: Job) => void;
+};
+
+export function JobDetails({ job, interaction, isSaving, onToggleStar, onMarkApplied }: Props) {
   return (
     <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm" aria-label="Selected job">
       {!job ? <p className="rounded-lg border border-slate-200 p-4 text-slate-500">Select or search for a job.</p> : null}
@@ -28,9 +36,28 @@ export function JobDetails({ job }: { job: Job | null }) {
               <p className="mt-2 text-slate-500">{valueOrFallback(job.company)} · {valueOrFallback(job.location)}</p>
             </div>
             <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => onToggleStar(job)}
+                className="rounded-lg border border-slate-200 px-4 py-3 font-bold hover:bg-slate-50 disabled:opacity-50"
+              >
+                {interaction?.starred ? "★ Starred" : "☆ Star"}
+              </button>
               {job.source_url ? <a className="rounded-lg border border-slate-200 px-4 py-3 font-bold hover:bg-slate-50" href={job.source_url} target="_blank" rel="noreferrer">Source</a> : null}
               {job.apply_url ? <a className="rounded-lg bg-teal-700 px-4 py-3 font-bold text-white hover:bg-teal-800" href={job.apply_url} target="_blank" rel="noreferrer">Apply</a> : null}
             </div>
+          </div>
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              disabled={isSaving || interaction?.applied}
+              onClick={() => onMarkApplied(job)}
+              className="rounded-lg border border-teal-700 px-4 py-2 font-bold text-teal-800 hover:bg-teal-50 disabled:cursor-default disabled:opacity-60"
+            >
+              {interaction?.applied ? "Applied ✓" : "Mark as applied"}
+            </button>
+            <span className="text-sm text-slate-500">Use this only after completing the external application.</span>
           </div>
           <dl className="my-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Fact label="Posted" value={formatDate(job.posting_date)} />

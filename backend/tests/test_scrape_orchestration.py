@@ -28,22 +28,16 @@ class ScrapeOrchestrationTests(unittest.TestCase):
             {"jobs.ch": 5, "swissdevjobs.ch": 5},
         )
 
-    @patch("api.services.scrape_orchestration.finish_scrape_run")
-    @patch("api.services.scrape_orchestration.upsert_jobs")
-    @patch("api.services.scrape_orchestration.start_scrape_run")
-    @patch("api.services.scrape_orchestration.get_or_create_source")
-    def test_combines_successful_sources(self, create_source, start, upsert, finish):
+    def test_combines_successful_sources_without_database_writes(self):
         self.jobs_ch.scrape.return_value = [make_job("jobs.ch")]
         self.swiss_dev.scrape.return_value = [make_job("swissdevjobs.ch")]
-        start.side_effect = lambda source, *args: {"source_id": source}
-        upsert.return_value = (1, 0)
-        finish.side_effect = lambda run, **values: {**run, **values}
 
         result = self.run_sources()
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["jobs_found"], 2)
-        self.assertEqual(result["jobs_created"], 2)
+        self.assertNotIn("jobs_created", result)
+        self.assertNotIn("jobs_updated", result)
         self.assertEqual(len(result["jobs"]), 2)
         self.assertEqual(
             {job["source_website"] for job in result["jobs"]},
@@ -51,19 +45,9 @@ class ScrapeOrchestrationTests(unittest.TestCase):
         )
         self.swiss_dev.scrape.assert_called_once_with("python", "Zürich", 5)
 
-    @patch("api.services.scrape_orchestration.finish_scrape_run")
-    @patch("api.services.scrape_orchestration.upsert_jobs")
-    @patch("api.services.scrape_orchestration.start_scrape_run")
-    @patch("api.services.scrape_orchestration.get_or_create_source")
-    def test_returns_partial_success_and_keeps_valid_jobs(
-        self, create_source, start, upsert, finish
-    ):
+    def test_returns_partial_success_and_keeps_valid_jobs(self):
         self.jobs_ch.scrape.side_effect = RuntimeError("jobs.ch unavailable")
         self.swiss_dev.scrape.return_value = [make_job("swissdevjobs.ch")]
-        start.side_effect = lambda source, *args: {"source_id": source}
-        upsert.return_value = (1, 0)
-        finish.side_effect = lambda run, **values: {**run, **values}
-
         result = self.run_sources()
 
         self.assertEqual(result["status"], "partial")
@@ -73,15 +57,9 @@ class ScrapeOrchestrationTests(unittest.TestCase):
         self.assertEqual(failed["source_id"], "jobs.ch")
         self.assertIn("unavailable", failed["error_message"])
 
-    @patch("api.services.scrape_orchestration.finish_scrape_run")
-    @patch("api.services.scrape_orchestration.start_scrape_run")
-    @patch("api.services.scrape_orchestration.get_or_create_source")
-    def test_reports_failed_when_both_sources_fail(self, create_source, start, finish):
+    def test_reports_failed_when_both_sources_fail(self):
         self.jobs_ch.scrape.side_effect = RuntimeError("first")
         self.swiss_dev.scrape.side_effect = RuntimeError("second")
-        start.side_effect = lambda source, *args: {"source_id": source}
-        finish.side_effect = lambda run, **values: {**run, **values}
-
         result = self.run_sources()
 
         self.assertEqual(result["status"], "failed")

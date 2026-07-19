@@ -1,26 +1,19 @@
 from __future__ import annotations
 
-from typing import List
-
 from fastapi import APIRouter, HTTPException
 
 from api.data.schemas import (
-    JobRead,
+    JobInteractionRead,
+    JobInteractionWrite,
     JobScrapeRequest,
     MultiSourceScrapeResult,
-    ScrapeRunRead,
 )
-from api.data.models import job_id
 from api.scrapers.jobs_ch import get_jobs_ch_scraper
 from api.scrapers.swiss_dev_jobs import get_swiss_dev_jobs_scraper
 from api.services.scrape_orchestration import scrape_sources
-from api.services.job_ingestion import (
-    count_jobs,
-    finish_scrape_run,
-    get_or_create_source,
-    list_jobs as list_stored_jobs,
-    start_scrape_run,
-    upsert_jobs,
+from api.services.job_interactions import (
+    list_job_interactions,
+    save_job_interaction,
 )
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -44,67 +37,19 @@ def scrape_all_sources(request: JobScrapeRequest) -> MultiSourceScrapeResult:
     return result
 
 
-@router.get("/count")
-def get_job_count() -> dict[str, int]:
-    return {"count": count_jobs()}
+@router.get("/interactions", response_model=list[JobInteractionRead])
+def get_interactions() -> list[JobInteractionRead]:
+    return list_job_interactions()
 
 
-
-@router.get("", response_model=List[JobRead])
-def list_jobs(
-    limit: int = 50,
-    query: str | None = None,
-    location: str | None = None,
-) -> List[dict]:
-    limit = max(1, min(limit, 200))
-    return list_stored_jobs(limit=limit, query=query, location=location)
-
-
-@router.post("/scrape/jobs-ch", response_model=ScrapeRunRead)
-def scrape_jobs_ch(
-    request: JobScrapeRequest,
-) -> ScrapeRunRead:
-    scraper = get_jobs_ch_scraper()
-    get_or_create_source(scraper.source_name, scraper.base_url)
-    run = start_scrape_run(
-        source_name=scraper.source_name,
-        search_term=request.search_term,
-        location=request.location,
-        pages=JOBS_CH_PAGES,
-    )
-
-    try:
-        normalized_jobs = scraper.scrape(
-            search_term=request.search_term,
-            location=request.location,
-            pages=JOBS_CH_PAGES,
-        )
-        created, updated = upsert_jobs(normalized_jobs)
-        finished_run = finish_scrape_run(
-            run,
-            status="completed",
-            jobs_found=len(normalized_jobs),
-            jobs_created=created,
-            jobs_updated=updated,
-            job_ids=[
-                job_id(job.source_website, str(job.source_url)) for job in normalized_jobs
-            ],
-        )
-        finished_run["jobs"] = [
-            {
-                "id": job_id(job.source_website, str(job.source_url)),
-                **job.model_dump(mode="json"),
-            }
-            for job in normalized_jobs
-        ]
-        return finished_run
-    except Exception as exc:
-        finish_scrape_run(
-            run,
-            status="failed",
-            jobs_found=0,
-            jobs_created=0,
-            jobs_updated=0,
-            error_message=str(exc),
-        )
-        raise HTTPException(status_code=502, detail="jobs.ch scrape failed") from exc
+@router.put(
+    "/interactions/{job_id:path}",
+    response_model=JobInteractionRead | None,
+)
+def put_interaction(
+    job_id: str,
+    interaction: JobInteractionWrite,
+) -> JobInteractionRead | None:
+    if interaction.job.id != job_id:
+        raise HTTPException(status_code=400, detail="Job ID does not match URL")
+    return save_job_interaction(job_id, interaction)
