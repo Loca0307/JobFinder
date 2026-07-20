@@ -75,8 +75,12 @@ AGENTS.md
 
 ## Side work
 
-# Important command:
+# Important commands:
+# 1
 Every time a complete new feature gets implemented, update the ARCHITECTURE.md file with a new section with the feature name as the title and some bullet points and short text describing how the feature got implemented. A bit more deeply, explain the flow in the project that the feature follow, especially the file it uses. If the implmenentation of a feature gets changed, also update its section. Also at the top of the file keep a list of "tech stack" used in the project, these are meant also libraries specific for some tasks.
+
+# 2
+Every time a new solution is created that implements a choice of some kind (architectural, efficiency, structural) keep the CHOICES.md file updated with a brief description of the solution option chosen and citing other options that could have been evaluated.
 
 -------------------------------------------------------------------------
 
@@ -395,4 +399,3 @@ SCRAPER_USER_AGENT=
 1) 
 When implementing features and most importantly during edits
 at the code base implement the fixes as simply as possible if not specified, edit as less code as possible to fix the problems
- 
