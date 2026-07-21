@@ -6,7 +6,7 @@
 - Database: DynamoDB through boto3
 - Scraping: Requests, urllib3 retry policies, and BeautifulSoup
 - Frontend: Next.js, React, TypeScript, Tailwind CSS 4 with PostCSS
-- Deployment: Docker Compose, Terraform, AWS Lambda (Python 3.11)
+- Deployment: Docker Compose, Terraform, AWS Lambda (Python 3.11), S3, CloudFront, CloudFront Functions, Origin Access Control
 - Existing AI dependencies: LangGraph, LangChain OpenAI
 
 ## Lambda Code Deployment Workflow
@@ -19,10 +19,21 @@
 ## Frontend Deployment Workflow
 
 - `.github/workflows/update-frontend.yaml` deploys frontend changes pushed to `main` and supports manual runs.
-- GitHub Actions installs the locked frontend dependencies with Node.js 22 and runs the Next.js static export with `NEXT_PUBLIC_API_BASE_URL` supplied by a repository variable.
+- GitHub Actions installs the locked frontend dependencies with Node.js 22 and runs the Next.js static export. Production API calls use same-origin `/jobs/*` paths through CloudFront, so no public backend URL is embedded in the bundle.
 - The generated `frontend/out/` contents are synchronized to the private `job-finder-static` bucket under `out/`, matching the CloudFront origin path, and obsolete objects are deleted.
 - After upload, the workflow invalidates `/*` on CloudFront distribution `E2U4YDALK1V35D` so the new static assets are served immediately.
 - `tf/gh_action_frontend.tf` provisions a separate repository-scoped OIDC role for the frontend workflow. Its policy can list only the configured frontend bucket, manage only objects under `out/`, and create invalidations only for the configured CloudFront distribution. The workflow assumes this role through the `AWS_FRONTEND_DEPLOY_ROLE_ARN` repository variable, keeping frontend permissions separate from the Lambda deployment role.
+
+## Private CloudFront Staging Access
+
+- CloudFront distribution `E2U4YDALK1V35D` is the single browser entry point. Its default behavior serves the private S3 static export and its `/jobs/*` behavior routes uncached requests to the FastAPI Lambda Function URL.
+- A viewer-request CloudFront Function performs shared HTTP Basic authentication on both behaviors. This is intentionally a staging access gate, not a per-user identity system.
+- `tf/cloudfront_security.tf` provisions a Lambda Origin Access Control using always-on SigV4 signing. `tf/lambda.tf` configures the Function URL with `AWS_IAM` and grants `lambda:InvokeFunctionUrl` plus URL-scoped `lambda:InvokeFunction` only to the CloudFront service when the source is the configured distribution ARN. Direct anonymous Function URL calls are rejected.
+- `tf/frontend_storage.tf` blocks every form of public S3 access and grants CloudFront read access only to the deployed `out/` objects when the request source is the configured distribution. A transport-deny statement rejects non-TLS S3 access.
+- Production frontend requests use relative `/jobs/*` URLs in `frontend/lib/jobs.ts`, so they remain on the authenticated CloudFront origin. Local Next.js development continues to call `http://localhost:8000`.
+- Lambda receives `CORS_ALLOWED_ORIGINS` from Terraform. `backend/main.py` uses that allowlist instead of accepting every browser origin.
+- The live distribution was initially created through the AWS console and is not yet in Terraform state. The OAC output must be attached to its Lambda origin; the distribution must be imported only after the applying IAM identity can read its complete configuration, preventing Terraform from creating a duplicate or replacing unknown behavior settings.
+- `tf/dynamodb.tf` retains encryption and point-in-time recovery and additionally enables deletion protection. Only the Lambda execution role receives item-level table API permissions.
 
 ## jobs.ch Job Scraping Foundation
 
@@ -57,15 +68,15 @@
 ## Jobs Frontend MVP
 
 - The frontend lives in `frontend/` and uses Next.js with React and TypeScript.
-- `frontend/app/page.tsx` presents live results from both sources and a starred-jobs view. `frontend/hooks/useJobsDashboard.ts` owns live results, interaction state, selection, and errors.
-- `frontend/lib/jobs.ts` calls the live-search and interaction endpoints using `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000` locally.
+- `frontend/app/page.tsx` presents live results from every registered source and a starred-jobs view. `frontend/hooks/useJobsDashboard.ts` owns live results, interaction state, selection, and errors.
+- `frontend/lib/jobs.ts` calls the live-search and interaction endpoints on the current CloudFront origin in production and uses `http://localhost:8000` during local development.
 - Job details provide an external Apply link, a separate explicit “Mark as applied” action, and star/unstar. Opening Apply alone never writes an interaction.
 - Incomplete summaries carry `details_loaded=false`. Selecting one calls `GET /jobs/details/{source_id}/{external_id}`, lets the registry delegate to that source's detail-capable scraper, replaces the summary in both visible results and the local cache, and enables star/applied actions only after the complete snapshot arrives. SwissDevJobs entries are complete from their RSS feed and skip this request.
 - The live-search term, location, and most recent result list are restored from browser `localStorage` after a refresh. Refreshing displays the cached jobs without scraping again; a new search replaces the cache, and the Clear button removes the stored search and results.
 
 ## Live Job Search and User Interactions
 
-- `POST /jobs/scrape` runs jobs.ch and SwissDevJobs concurrently and returns normalized jobs directly. Search orchestration performs no DynamoDB writes; source counts and failures go through Python logging to CloudWatch in Lambda.
+- `POST /jobs/scrape` runs jobs.ch, jobup.ch, and SwissDevJobs concurrently and returns normalized jobs directly. Search orchestration performs no DynamoDB writes; source counts and failures go through Python logging to CloudWatch in Lambda.
 - Stable job IDs are derived from source name and canonical source URL. They identify interaction records without requiring a global stored-job index.
 - DynamoDB stores only user interactions at `PK = USER#<user-id>` and `SK = JOB#<job-id>`. Each `JOB_INTERACTION` contains a complete display snapshot, `starred`, `applied`, and timestamps. The current server-side user is `default`, leaving the key layout ready for authenticated users.
 - `GET /jobs/interactions` queries tracked jobs. `PUT /jobs/interactions/{job_id}` handles star, unstar, and explicit applied confirmation; when both flags are false it deletes the record, while unstarred applied jobs remain.
@@ -78,6 +89,14 @@
 - `backend/api/scrapers/swiss_dev_jobs.py` implements the second job source through SwissDevJobs' public RSS feed. One request retrieves the feed, Python's standard XML parser reads its entries, and BeautifulSoup converts the embedded HTML sections into normalized requirements, responsibilities, technologies, salary, company, publication date, and job links.
 - RSS tracking parameters are removed before normalization so the same vacancy keeps a stable ID and interaction key.
 - Keyword filtering runs locally across the normalized title, company, description, requirements, technologies, and original RSS text. Location aliases use the shared Swiss location normalizer and must appear in the entry text; an entry without matching location evidence is excluded when a location was requested.
-- `backend/api/services/scrape_orchestration.py` runs jobs.ch and SwissDevJobs concurrently while each scraper retains its own HTTP client and rate limiter. A single-source failure produces aggregate status `partial`; HTTP 502 is returned only when every source fails.
-- The frontend search form calls the unified endpoint and renders both sources through the same `Job` type, list, and details components. Existing source badges identify where each result originated without requiring a source selector.
+- `backend/api/services/scrape_orchestration.py` runs every registered source concurrently within its configured source-worker bound, while each scraper retains its own HTTP client and rate limiter. A single-source failure produces aggregate status `partial`; HTTP 502 is returned only when every source fails.
+- The frontend search form calls the unified endpoint and renders every source through the same `Job` type, list, and details components. Existing source badges identify where each result originated without requiring a source selector.
 - `backend/tests/test_swiss_dev_jobs_scraper.py` covers RSS parsing, canonical URLs, normalized attributes, local keyword and location filters, deduplication, and single-request feed access. `backend/tests/test_scrape_orchestration.py` covers complete success, partial success, and total failure across sources.
+
+## jobup.ch JobCloud Scraping
+
+- `backend/api/scrapers/jobup_ch.py` implements jobup.ch as a small `JobsChScraper` subclass because live verification showed that both JobCloud sites currently expose the same embedded `__INIT__` listing state and schema.org `JobPosting` detail data.
+- `JobsChScraper` defines overridable `listing_path` and `detail_path` attributes. jobup.ch changes only the source name, host, and `/en/jobs/` paths while reusing listing validation, normalization, concurrent pagination, per-source HTTP clients, rate limiting, lazy detail loading, JSON-LD parsing, and the HTML detail fallback.
+- Search requests parse lightweight summaries and mark them with `details_loaded=false`. Selecting one goes through the existing source-neutral detail route, which resolves the registered `JobupChScraper` and requests only that job's detail page.
+- `backend/api/scrapers/registry.py` registers the cached jobup.ch factory alongside jobs.ch and SwissDevJobs, so orchestration and the frontend require no source-specific branching.
+- `backend/tests/test_jobup_ch_scraper.py` verifies jobup.ch query/detail URLs, source-specific normalized summaries, lazy-detail behavior, and cached factory reuse without live network requests. Existing jobs.ch tests continue to cover the shared parser and fallback behavior.

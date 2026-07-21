@@ -4,6 +4,31 @@ This document records the meaningful architectural and efficiency choices in
 JobFinder. It describes the current implementation, why it fits the present
 MVP, and the main alternatives available as the project grows.
 
+## Private Staging Authentication and Origin Isolation
+
+**Choice:** Put shared Basic authentication at CloudFront for the private
+staging site, route browser API calls through a `/jobs/*` behavior, and use a
+SigV4 Lambda Origin Access Control with an `AWS_IAM` Function URL.
+
+**Why:** The static Next.js export cannot safely hold a backend secret. A
+viewer-request function blocks unauthenticated users before cached content is
+served, while OAC independently proves that API origin requests came from the
+configured CloudFront distribution. Lambda remains the only component with
+DynamoDB permissions. This is small enough for a few trusted testers and
+closes the direct public Function URL.
+
+**Other options:**
+
+- Amazon Cognito: provides individual users, revocation, and JWT claims, but
+  adds token and account lifecycle complexity that private staging does not
+  yet need.
+- A secret compiled into the frontend: simple but ineffective because browser
+  bundles and network requests expose it.
+- IP allowlisting: useful for fixed networks, but inconvenient for friends on
+  changing residential and mobile addresses.
+- Leaving the Lambda URL public and relying on CORS: CORS is a browser policy,
+  not API authorization, and non-browser clients could bypass it.
+
 ## 1. Modular Monolith Backend
 
 **Choice:** Use one FastAPI application, divided into routes, services,
@@ -542,3 +567,30 @@ and AI processing grow, the likely progression is:
 These changes should be introduced in response to measured traffic, latency,
 cost, or reliability problems rather than preemptively replacing the simpler
 MVP design.
+
+## 33. Reuse the JobCloud Scraper Strategy for jobup.ch
+
+**Choice:** Implement jobup.ch as a thin `JobsChScraper` subclass and make the
+JobCloud listing and detail paths configurable on the parent class.
+
+**Why:** Live inspection confirmed that jobup.ch uses the same embedded
+`__INIT__` listing shape and schema.org `JobPosting` detail format as jobs.ch.
+Only the host and URL paths differ today, so inheritance keeps validation,
+normalization, concurrency, rate limiting, and lazy details consistent without
+duplicating a large parser.
+
+**Other options:**
+
+- Duplicate a complete jobup.ch scraper: isolates future site divergence, but
+  immediately duplicates parsing and network behavior that are currently equal.
+- Extract a new abstract JobCloud base class: gives the cleanest conceptual
+  hierarchy, but adds a larger refactor before a second behavior has diverged.
+- Parse visual HTML cards: works with the server-rendered page, but is more
+  coupled to presentation changes than the existing structured payload.
+- Use Playwright: unnecessary because listings and JSON-LD details are already
+  present in ordinary HTTP responses, while adding runtime and deployment cost.
+
+**Limitation:** The shared undocumented payload can change, and either JobCloud
+site may diverge independently. Parser validation raises a source failure rather
+than reporting an untrustworthy empty result; the subclass can override a parser
+later if jobup.ch develops a different structure.

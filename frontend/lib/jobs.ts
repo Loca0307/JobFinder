@@ -1,6 +1,6 @@
 import type { Job, JobInteraction, JobScrapeRequest, ScrapeResult } from "@/types/job";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL = process.env.NODE_ENV === "production" ? "" : "http://localhost:8000";
 
 export async function scrapeJobs(request: JobScrapeRequest): Promise<ScrapeResult> {
   const response = await fetch(`${API_BASE_URL}/jobs/scrape`, {

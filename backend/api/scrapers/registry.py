@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from api.scrapers.base import BaseJobScraper, DetailJobScraper
+from api.scrapers.jobup_ch import get_jobup_ch_scraper
 from api.scrapers.jobs_ch import get_jobs_ch_scraper
 from api.scrapers.swiss_dev_jobs import get_swiss_dev_jobs_scraper
 
@@ -10,6 +11,7 @@ ScraperFactory = Callable[[], BaseJobScraper]
 
 _SCRAPER_FACTORIES: tuple[ScraperFactory, ...] = (
     get_jobs_ch_scraper,
+    get_jobup_ch_scraper,
     get_swiss_dev_jobs_scraper,
 )
 

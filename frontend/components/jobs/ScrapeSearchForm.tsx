@@ -22,7 +22,9 @@ export function ScrapeSearchForm(props: Props) {
       <div>
         <p className="mb-1 text-xs font-extrabold uppercase text-teal-700">Swiss job search</p>
         <h2 className="text-xl font-bold">Search live jobs</h2>
-        <p className="mt-1 text-sm text-slate-500">Search jobs.ch and SwissDevJobs without storing every result.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Search jobs.ch, jobup.ch, and SwissDevJobs without storing every result.
+        </p>
       </div>
       <label className="grid gap-2 text-sm font-bold text-slate-600">
         Role or keywords

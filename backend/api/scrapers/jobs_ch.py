@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 class JobsChScraper(PaginatedJobScraper):
     source_name = "jobs.ch"
     base_url = "https://www.jobs.ch"
+    listing_path = "/en/vacancies/"
+    detail_path = "/en/vacancies/detail/"
 
     def __init__(self) -> None:
         settings = get_settings()
@@ -70,7 +72,7 @@ class JobsChScraper(PaginatedJobScraper):
         if page > 1:
             params.append(f"page={page}")
         query = "&".join(params)
-        return f"{self.base_url}/en/vacancies/{'?' + query if query else ''}"
+        return f"{self.base_url}{self.listing_path}{'?' + query if query else ''}"
 
     def _extract_listing_jobs(self, html: str) -> list[NormalizedJob]:
         marker = re.search(r"__INIT__\s*=\s*", html)
@@ -95,7 +97,7 @@ class JobsChScraper(PaginatedJobScraper):
             if not external_id or not title:
                 continue
 
-            url = f"{self.base_url}/en/vacancies/detail/{external_id}/"
+            url = f"{self.base_url}{self.detail_path}{external_id}/"
             company = summary.get("company") or {}
             jobs.append(
                 NormalizedJob(
@@ -118,8 +120,8 @@ class JobsChScraper(PaginatedJobScraper):
 
     def scrape_detail(self, external_id: str) -> NormalizedJob | None:
         if re.fullmatch(r"[A-Za-z0-9-]+", external_id) is None:
-            raise ValueError("Invalid jobs.ch job ID")
-        url = f"{self.base_url}/en/vacancies/detail/{external_id}/"
+            raise ValueError(f"Invalid {self.source_name} job ID")
+        url = f"{self.base_url}{self.detail_path}{external_id}/"
         with self._create_http_client() as client:
             return self._scrape_detail(url, client)
 

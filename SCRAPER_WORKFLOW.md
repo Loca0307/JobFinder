@@ -1,6 +1,6 @@
 # Job Scraper Workflow
 
-This document shows the normal path from `POST /jobs/scrape` through both job
+This document shows the normal path from `POST /jobs/scrape` through all job
 sources and back to the frontend. The diagram emphasizes which component is
 responsible for each part of the work and reflects the source-neutral lazy-detail flow.
 
@@ -20,7 +20,7 @@ flowchart TD
         SUMMARY["Builds aggregate status, source diagnostics,<br/>stable job IDs, and the final job list"]
     end
 
-    subgraph JOBSCH["3A · JobsChScraper — paginated lightweight search"]
+    subgraph JOBCLOUD["3A · jobs.ch / jobup.ch — paginated lightweight search"]
         PAGEPLAN["Creates one task per requested page<br/>default: 5"]
         PAGEPOOL["Runs page tasks concurrently<br/>bounded by SCRAPER_MAX_WORKERS"]
         LISTURL["Normalizes the location and builds a listing URL"]
@@ -45,7 +45,7 @@ flowchart TD
         STATUS["Final status is checked and the response returned"]
     end
 
-    JOBSCHSITE["jobs.ch"]
+    JOBCLOUDSITE["jobs.ch or jobup.ch"]
     RSSSITE["swissdevjobs.ch/rss"]
     RETURN(["MultiSourceScrapeResult<br/>completed · partial · or HTTP 502 if all sources fail"])
 
@@ -56,9 +56,9 @@ flowchart TD
     LISTURL -->|"listing request"| GET
     RSS -->|"feed request"| GET
     GET --> LIMIT --> SESSION --> RETRY
-    RETRY -->|"HTTPS GET"| JOBSCHSITE
+    RETRY -->|"HTTPS GET"| JOBCLOUDSITE
     RETRY -->|"HTTPS GET"| RSSSITE
-    JOBSCHSITE -. "listing response" .-> STATUS
+    JOBCLOUDSITE -. "listing response" .-> STATUS
     RSSSITE -. "RSS response" .-> STATUS
     STATUS -.-> INITJSON
     STATUS -.-> XML
@@ -109,6 +109,7 @@ flowchart LR
 | `BaseJobScraper` / `DetailJobScraper` | Defining the common search contract and the optional on-demand detail capability | Threads, HTTP, or source parsing |
 | `PaginatedJobScraper` | Page tasks, bounded page concurrency, partial-page success, page ordering, and source-URL deduplication | Website-specific URLs or HTML/JSON parsing |
 | `JobsChScraper` | Building jobs.ch listing URLs, parsing lightweight summaries, and loading one detail on demand | Cross-source coordination or interaction persistence |
+| `JobupChScraper` | Supplying jobup.ch identity and paths while reusing the shared JobCloud listing/detail behavior | Cross-source coordination or a duplicate parser |
 | `SwissDevJobsScraper` | Fetching and parsing RSS, local search filtering, canonical URLs, and complete RSS job normalization | Pagination or on-demand detail loading |
 | `RequestRateLimiter` | Enforcing one request-start rate across clients belonging to a cached scraper | Sending or interpreting responses |
 | `ScraperHttpClient` | Applying the limiter, timeouts, retry-enabled sessions, final status checks, and cleanup | Understanding source payloads |
@@ -126,11 +127,14 @@ One backend process
 │       ├── worker 1 → HTTP client 1 → Session 1 → HTTPAdapter
 │       ├── worker 2 → HTTP client 2 → Session 2 → HTTPAdapter
 │       └── worker N → HTTP client N → Session N → HTTPAdapter
+├── one cached JobupChScraper
+│   ├── one shared jobup.ch RequestRateLimiter
+│   └── concurrent page workers with independent HTTP sessions
 ├── one cached SwissDevJobsScraper
 │   ├── one shared SwissDevJobs RequestRateLimiter
 │   └── one request → HTTP client → Session → HTTPAdapter
 └── scrape_sources
-    └── bounded source workers run both scraper instances concurrently
+    └── bounded source workers run all scraper instances concurrently
 ```
 
 Sessions are independent because each belongs to one worker/client context. A
@@ -140,9 +144,9 @@ have separate bounds.
 
 ## Normal workflow in plain language
 
-1. FastAPI validates `JobScrapeRequest` and passes the cached jobs.ch and
-   SwissDevJobs scraper instances to `scrape_sources()`.
-2. The source executor starts both scrapers concurrently, up to
+1. FastAPI validates `JobScrapeRequest` and passes the cached jobs.ch, jobup.ch,
+   and SwissDevJobs scraper instances to `scrape_sources()`.
+2. The source executor starts all scrapers concurrently, up to
    `SCRAPER_SOURCE_MAX_WORKERS`.
 3. `JobsChScraper` creates five page tasks by default. Each worker normalizes
    the requested location, fetches one listing, and validates its embedded
@@ -152,19 +156,20 @@ have separate bounds.
 4. The jobs.ch coordinator preserves successful pages even if another page
    fails. It raises `ScrapeError` only when every requested page fails, then
    restores page order and removes duplicate source URLs.
-5. `SwissDevJobsScraper` fetches its RSS feed once, parses XML and embedded HTML,
+5. `JobupChScraper` follows the same paginated and lazy-detail flow with
+   jobup.ch-specific listing and detail paths. `SwissDevJobsScraper` fetches its RSS feed once, parses XML and embedded HTML,
    applies the search and location filters locally, removes tracking parameters,
    and returns complete jobs.
 6. Every request passes through its scraper's shared rate limiter and a
    worker-owned retry-enabled session with configured connect/read timeouts.
 7. `scrape_sources()` records each source as completed or failed without letting
-   one source failure stop the other source.
+   one source failure stop the other sources.
 8. Jobs from successful sources are conservatively deduplicated using normalized
    title, company, and location. The aggregate count describes this final list;
    per-source counts remain the raw diagnostic counts.
 9. The API returns `completed` when all sources succeed, `partial` when at least
    one succeeds, and HTTP 502 with a failed result only when all sources fail.
-10. Selecting an incomplete summary triggers the generic detail endpoint. For jobs.ch, JSON-LD is
+10. Selecting an incomplete summary triggers the generic detail endpoint. For jobs.ch and jobup.ch, JSON-LD is
     preferred, HTML is the fallback, normalized attributes are extracted, and
     the frontend replaces the summary with the complete job.
 11. Live-search results are not written to DynamoDB. Only explicit star/applied

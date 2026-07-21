@@ -23,3 +23,9 @@ variable "frontend_cloudfront_distribution_id" {
   type    = string
   default = "E2U4YDALK1V35D"
 }
+
+variable "frontend_cloudfront_domain_name" {
+  description = "CloudFront domain used by the private staging frontend and API."
+  type        = string
+  default     = "d3k51jzo7lp8xb.cloudfront.net"
+}

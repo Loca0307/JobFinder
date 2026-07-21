@@ -40,7 +40,8 @@ resource "aws_lambda_function" "fastapi" {
 
   environment {
     variables = {
-      DYNAMODB_JOBS_TABLE = aws_dynamodb_table.jobs.name
+      CORS_ALLOWED_ORIGINS = "https://${var.frontend_cloudfront_domain_name}"
+      DYNAMODB_JOBS_TABLE  = aws_dynamodb_table.jobs.name
     }
   }
 
@@ -52,20 +53,22 @@ resource "aws_lambda_function" "fastapi" {
 
 resource "aws_lambda_function_url" "fastapi" {
   function_name      = aws_lambda_function.fastapi.function_name
-  authorization_type = "NONE"
+  authorization_type = "AWS_IAM"
 }
 
-resource "aws_lambda_permission" "allow_public_function_url" {
-  statement_id           = "AllowPublicFunctionUrl"
+resource "aws_lambda_permission" "allow_cloudfront_function_url" {
+  statement_id           = "AllowCloudFrontFunctionUrl"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.fastapi.function_name
-  principal              = "*"
-  function_url_auth_type = "NONE"
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${var.frontend_cloudfront_distribution_id}"
+  function_url_auth_type = "AWS_IAM"
 }
 
-resource "aws_lambda_permission" "allow_public_function_url_invoke" {
-  statement_id  = "AllowPublicFunctionUrlInvoke"
+resource "aws_lambda_permission" "allow_cloudfront_function_url_invoke" {
+  statement_id  = "AllowCloudFrontFunctionUrlInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.fastapi.function_name
-  principal     = "*"
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${var.frontend_cloudfront_distribution_id}"
 }

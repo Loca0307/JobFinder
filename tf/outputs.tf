@@ -1,6 +1,16 @@
 output "fastapi_url" {
-  description = "Public URL for the FastAPI Lambda function."
+  description = "IAM-protected FastAPI Lambda Function URL used as the CloudFront API origin."
   value       = aws_lambda_function_url.fastapi.function_url
+}
+
+output "cloudfront_lambda_oac_id" {
+  description = "Attach this OAC ID to the Lambda Function URL origin in the existing CloudFront distribution."
+  value       = aws_cloudfront_origin_access_control.lambda.id
+}
+
+output "private_application_url" {
+  description = "Private staging entry point for the frontend and API."
+  value       = "https://${var.frontend_cloudfront_domain_name}"
 }
 
 output "jobs_table_arn" {

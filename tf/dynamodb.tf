@@ -1,8 +1,9 @@
 resource "aws_dynamodb_table" "jobs" {
-  name         = var.jobs_table_name
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "PK"
-  range_key    = "SK"
+  name                        = var.jobs_table_name
+  billing_mode                = "PAY_PER_REQUEST"
+  deletion_protection_enabled = true
+  hash_key                    = "PK"
+  range_key                   = "SK"
 
   attribute {
     name = "PK"

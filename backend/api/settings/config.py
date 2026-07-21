@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     dynamodb_jobs_table: str = Field(default="Jobs", alias="DYNAMODB_JOBS_TABLE")
     dynamodb_endpoint_url: Optional[str] = Field(default=None, alias="DYNAMODB_ENDPOINT_URL")
     aws_region: str = Field(default="eu-central-1", alias="AWS_REGION")
+    cors_allowed_origins: str = Field(
+        default="http://localhost:3000",
+        alias="CORS_ALLOWED_ORIGINS",
+    )
     scraper_user_agent: str = Field(
         default=(
             "JobFinderBot/0.1 "
