@@ -504,8 +504,9 @@ method appropriate to its runtime, and has separate AWS permissions.
 
 ## 29. Terraform as Infrastructure Source of Truth
 
-**Choice:** Provision Lambda, DynamoDB, IAM, and deployment roles with Terraform,
-while CI updates application artifacts.
+**Choice:** Provision Lambda, DynamoDB, IAM, frontend bucket access controls, and
+deployment roles with Terraform, while CI updates application artifacts.
+CloudFront and its OAC remain console-managed.
 
 **Why:** Infrastructure is reviewable and reproducible, while code-only releases
 remain fast.
@@ -516,8 +517,8 @@ remain fast.
   and synthesis layers.
 - Serverless Framework or SAM: convenient for Lambda-centric applications, but
   introduces another deployment abstraction.
-- Manual console configuration: quick initially, but difficult to reproduce and
-  audit.
+- Managing CloudFront in Terraform: reproducible, but unnecessary for the slim
+  deployment stack while the existing distribution remains console-managed.
 
 ## 30. GitHub Actions OIDC and Least-Privilege Roles
 

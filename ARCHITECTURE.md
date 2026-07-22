@@ -6,12 +6,12 @@
 - Database: DynamoDB through boto3
 - Scraping: Requests, urllib3 retry policies, and BeautifulSoup
 - Frontend: Next.js, React, TypeScript, Tailwind CSS 4 with PostCSS
-- Deployment: Docker Compose, Terraform, AWS Lambda (Python 3.11), S3, CloudFront, CloudFront Functions, Origin Access Control
+- Deployment: Docker Compose, Terraform, AWS Lambda (Python 3.11), S3, CloudFront, CloudFront Functions
 - Existing AI dependencies: LangGraph, LangChain OpenAI
 
 ## Lambda Code Deployment Workflow
 
-- `.github/workflows/update-lambda.yaml` deploys backend-only changes pushed to `main` and also supports manual runs.
+- `.github/workflows/update-backend.yaml` deploys backend-only changes pushed to `main` and also supports manual runs.
 - The workflow builds a Python 3.11 ZIP from `backend/main.py`, `backend/api/`, and `backend/requirements.txt`, matching the Lambda runtime managed in `tf/lambda.tf`, then updates the existing `JobFinder-fastapi` function.
 - GitHub Actions authenticates with short-lived AWS credentials through OIDC using the `AWS_DEPLOY_ROLE_ARN` repository variable. `tf/gh_action_backend.tf` provisions the repository-and-branch-scoped OIDC trust plus a role limited to updating and reading the existing Lambda function.
 - Terraform remains the source of truth for infrastructure and Lambda configuration. It is applied separately because this repository currently uses local Terraform state; the workflow changes Lambda code only.
@@ -28,11 +28,11 @@
 
 - CloudFront distribution `E2U4YDALK1V35D` is the single browser entry point. Its default behavior serves the private S3 static export and its `/jobs/*` behavior routes uncached requests to the FastAPI Lambda Function URL.
 - A viewer-request CloudFront Function performs shared HTTP Basic authentication on both behaviors. This is intentionally a staging access gate, not a per-user identity system.
-- `tf/cloudfront_security.tf` provisions a Lambda Origin Access Control using always-on SigV4 signing. `tf/lambda.tf` configures the Function URL with `AWS_IAM` and grants `lambda:InvokeFunctionUrl` plus URL-scoped `lambda:InvokeFunction` only to the CloudFront service when the source is the configured distribution ARN. Direct anonymous Function URL calls are rejected.
+- CloudFront and its Lambda Origin Access Control are configured outside Terraform. `tf/lambda.tf` keeps the Function URL protected with `AWS_IAM` and grants `lambda:InvokeFunctionUrl` plus URL-scoped `lambda:InvokeFunction` only to the configured CloudFront distribution. Direct anonymous Function URL calls are rejected.
 - `tf/frontend_storage.tf` blocks every form of public S3 access and grants CloudFront read access only to the deployed `out/` objects when the request source is the configured distribution. A transport-deny statement rejects non-TLS S3 access.
 - Production frontend requests use relative `/jobs/*` URLs in `frontend/lib/jobs.ts`, so they remain on the authenticated CloudFront origin. Local Next.js development continues to call `http://localhost:8000`.
 - Lambda receives `CORS_ALLOWED_ORIGINS` from Terraform. `backend/main.py` uses that allowlist instead of accepting every browser origin.
-- The live distribution was initially created through the AWS console and is not yet in Terraform state. The OAC output must be attached to its Lambda origin; the distribution must be imported only after the applying IAM identity can read its complete configuration, preventing Terraform from creating a duplicate or replacing unknown behavior settings.
+- The live distribution and its OAC were created through the AWS console and remain outside Terraform so this small stack manages only the resources required by deployments and the application runtime.
 - `tf/dynamodb.tf` retains encryption and point-in-time recovery and additionally enables deletion protection. Only the Lambda execution role receives item-level table API permissions.
 
 ## jobs.ch Job Scraping Foundation

@@ -1,3 +1,7 @@
+locals {
+  frontend_cloudfront_distribution_arn = "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${var.frontend_cloudfront_distribution_id}"
+}
+
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket = var.frontend_bucket_name
 
