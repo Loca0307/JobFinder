@@ -11,6 +11,7 @@ class NormalizedJob(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     company: Optional[str] = None
     location: Optional[str] = None
+    country_code: Optional[str] = Field(default=None, pattern=r"^[A-Z]{2}$")
     description: Optional[str] = None
     requirements: Optional[str] = None
     seniority: Optional[str] = None

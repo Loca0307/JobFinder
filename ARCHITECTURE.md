@@ -100,3 +100,10 @@
 - Search requests parse lightweight summaries and mark them with `details_loaded=false`. Selecting one goes through the existing source-neutral detail route, which resolves the registered `JobupChScraper` and requests only that job's detail page.
 - `backend/api/scrapers/registry.py` registers the cached jobup.ch factory alongside jobs.ch and SwissDevJobs, so orchestration and the frontend require no source-specific branching.
 - `backend/tests/test_jobup_ch_scraper.py` verifies jobup.ch query/detail URLs, source-specific normalized summaries, lazy-detail behavior, and cached factory reuse without live network requests. Existing jobs.ch tests continue to cover the shared parser and fallback behavior.
+
+## Switzerland-Only Result Filter
+
+- `NormalizedJob.country_code` carries the source-provided ISO alpha-2 country code.
+- `backend/api/services/scrape_orchestration.py` keeps only jobs whose code is exactly `CH` before deduplication and API serialization.
+- Foreign and unclassified jobs are therefore omitted from `POST /jobs/scrape` without adding source-specific filtering to the route or frontend.
+- `backend/tests/test_scrape_orchestration.py` covers `CH`, foreign, and missing country codes.

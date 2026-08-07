@@ -595,3 +595,14 @@ duplicating a large parser.
 site may diverge independently. Parser validation raises a source failure rather
 than reporting an untrustworthy empty result; the subclass can override a parser
 later if jobup.ch develops a different structure.
+
+## 34. Central Switzerland-Only Filter
+
+**Choice:** Keep only normalized jobs whose source-provided `country_code` is
+exactly `CH` in the existing scrape orchestration step.
+
+**Why:** One small central check guarantees the API does not return foreign or
+unclassified jobs and keeps the rule out of the route and frontend.
+
+**Other options:** Filtering separately inside every scraper would duplicate
+the same policy and make new sources easier to implement inconsistently.

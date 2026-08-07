@@ -13,6 +13,7 @@ from api.services.location_normalization import normalize_location
 from api.settings.config import get_settings
 
 logger = logging.getLogger(__name__)
+SWISS_COUNTRY_CODE = "CH"
 
 
 def scrape_sources(
@@ -107,7 +108,11 @@ def _scrape_source(
     pages: int,
 ) -> dict[str, Any]:
     try:
-        jobs = scraper.scrape(search_term, location, pages)
+        jobs = [
+            job
+            for job in scraper.scrape(search_term, location, pages)
+            if job.country_code == SWISS_COUNTRY_CODE
+        ]
         logger.info(
             "Live scrape completed for %s with %s jobs",
             scraper.source_name,

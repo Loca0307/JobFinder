@@ -6,11 +6,12 @@ from api.data.schemas import NormalizedJob
 from api.services.scrape_orchestration import scrape_sources
 
 
-def make_job(source: str) -> NormalizedJob:
+def make_job(source: str, country_code: str | None = "CH") -> NormalizedJob:
     return NormalizedJob(
         title=f"Job from {source}",
+        country_code=country_code,
         source_website=source,
-        source_url=f"https://example.test/{source}",
+        source_url=f"https://example.test/{source}/{country_code}",
     )
 
 
@@ -64,6 +65,7 @@ class ScrapeOrchestrationTests(unittest.TestCase):
                 title="Senior Python Developer",
                 company="Example AG",
                 location="Zurich",
+                country_code="CH",
                 source_website="jobs.ch",
                 source_url="https://jobs.ch/job/42",
             )
@@ -73,6 +75,7 @@ class ScrapeOrchestrationTests(unittest.TestCase):
                 title=" senior  PYTHON developer ",
                 company="Example AG",
                 location="Zürich",
+                country_code="CH",
                 source_website="swissdevjobs.ch",
                 source_url="https://swissdevjobs.ch/jobs/example-42",
             )
@@ -93,6 +96,7 @@ class ScrapeOrchestrationTests(unittest.TestCase):
                 title="Python Developer",
                 company="Example AG",
                 location="Bern",
+                country_code="CH",
                 source_website="jobs.ch",
                 source_url="https://jobs.ch/job/bern",
             )
@@ -102,6 +106,7 @@ class ScrapeOrchestrationTests(unittest.TestCase):
                 title="Python Developer",
                 company="Example AG",
                 location="Zürich",
+                country_code="CH",
                 source_website="swissdevjobs.ch",
                 source_url="https://swissdevjobs.ch/jobs/zurich",
             )
@@ -110,6 +115,19 @@ class ScrapeOrchestrationTests(unittest.TestCase):
         result = self.run_sources()
 
         self.assertEqual(result["jobs_found"], 2)
+
+    def test_returns_only_jobs_with_ch_country_code(self):
+        self.jobs_ch.scrape.return_value = [
+            make_job("jobs.ch", "CH"),
+            make_job("jobs.ch", "DE"),
+            make_job("jobs.ch", None),
+        ]
+        self.swiss_dev.scrape.return_value = []
+
+        result = self.run_sources()
+
+        self.assertEqual(result["jobs_found"], 1)
+        self.assertEqual(result["jobs"][0]["country_code"], "CH")
 
     def test_reports_failed_when_both_sources_fail(self):
         self.jobs_ch.scrape.side_effect = RuntimeError("first")
