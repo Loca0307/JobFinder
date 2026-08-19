@@ -103,7 +103,7 @@
 
 ## Switzerland-Only Result Filter
 
-- `NormalizedJob.country_code` carries the source-provided ISO alpha-2 country code.
+- `NormalizedJob.country_code` carries the ISO alpha-2 country code assigned by each scraper during normalization. The registered jobs.ch, jobup.ch, and SwissDevJobs sources are Switzerland-specific and set `CH` on both lightweight listings and complete details.
 - `backend/api/services/scrape_orchestration.py` keeps only jobs whose code is exactly `CH` before deduplication and API serialization.
 - Foreign and unclassified jobs are therefore omitted from `POST /jobs/scrape` without adding source-specific filtering to the route or frontend.
-- `backend/tests/test_scrape_orchestration.py` covers `CH`, foreign, and missing country codes.
+- Scraper parser tests assert `CH` on normalized output, while `backend/tests/test_scrape_orchestration.py` covers `CH`, foreign, and missing country codes.

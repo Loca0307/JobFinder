@@ -99,6 +99,7 @@ class SwissDevJobsScraper(BaseJobScraper):
         return NormalizedJob(
             title=title,
             company=company,
+            country_code="CH",
             description=description or None,
             requirements=requirements,
             seniority=extract_seniority(title, description),

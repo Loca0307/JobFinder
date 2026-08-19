@@ -63,6 +63,7 @@ class JobsChScraperTests(unittest.TestCase):
         self.assertEqual(jobs[0].title, "Python Developer")
         self.assertEqual(jobs[0].company, "Example AG")
         self.assertEqual(jobs[0].location, "Zürich")
+        self.assertEqual(jobs[0].country_code, "CH")
         self.assertEqual(jobs[0].external_id, "job-42")
         self.assertFalse(jobs[0].details_loaded)
 
@@ -151,6 +152,7 @@ class JobsChScraperTests(unittest.TestCase):
         self.assertEqual(job.title, "Senior Python Engineer")
         self.assertEqual(job.company, "Example AG")
         self.assertEqual(job.location, "Zürich, CH; Bern")
+        self.assertEqual(job.country_code, "CH")
         self.assertEqual(job.description, "Fluent English. Hybrid work available.")
         self.assertEqual(job.requirements, "Python FastAPI")
         self.assertEqual(job.seniority, "senior")
@@ -183,6 +185,7 @@ class JobsChScraperTests(unittest.TestCase):
 
         self.assertIsNotNone(job)
         self.assertEqual(job.title, "Junior Backend Developer")
+        self.assertEqual(job.country_code, "CH")
         self.assertEqual(job.seniority, "junior")
         self.assertEqual(job.remote_type, "hybrid")
         self.assertEqual(job.required_languages, ["English"])

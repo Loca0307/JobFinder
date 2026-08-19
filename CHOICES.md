@@ -598,11 +598,17 @@ later if jobup.ch develops a different structure.
 
 ## 34. Central Switzerland-Only Filter
 
-**Choice:** Keep only normalized jobs whose source-provided `country_code` is
-exactly `CH` in the existing scrape orchestration step.
+**Choice:** Require each scraper to populate `country_code` at the normalization
+boundary, then keep only exact `CH` values in the existing scrape orchestration
+step.
 
-**Why:** One small central check guarantees the API does not return foreign or
-unclassified jobs and keeps the rule out of the route and frontend.
+**Why:** The current sources are Swiss-only and their listing and RSS payloads
+do not consistently expose a country field. They therefore assign `CH` from
+trusted source scope, while one central check still rejects foreign or
+unclassified output from future sources and keeps that policy out of the route
+and frontend.
 
-**Other options:** Filtering separately inside every scraper would duplicate
-the same policy and make new sources easier to implement inconsistently.
+**Other options:** Relying only on upstream country fields does not work for the
+current summary payloads. Inferring the country from source names in the
+orchestrator would couple it to registry details. Accepting missing country
+codes would weaken the Switzerland-only guarantee.

@@ -41,6 +41,7 @@ class JobupChScraperTests(unittest.TestCase):
 
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs[0].source_website, "jobup.ch")
+        self.assertEqual(jobs[0].country_code, "CH")
         self.assertEqual(
             str(jobs[0].source_url),
             "https://www.jobup.ch/en/jobs/detail/job-42/",

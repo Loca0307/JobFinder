@@ -104,6 +104,7 @@ class JobsChScraper(PaginatedJobScraper):
                     title=title,
                     company=company.get("name") if isinstance(company, dict) else None,
                     location=summary.get("place"),
+                    country_code="CH",
                     source_website=self.source_name,
                     source_url=url,
                     apply_url=url,
@@ -149,6 +150,7 @@ class JobsChScraper(PaginatedJobScraper):
             title=title,
             company=None,
             location=None,
+            country_code="CH",
             description=description,
             seniority=extract_seniority(title, description),
             remote_type=extract_remote_type(title, description),
@@ -185,6 +187,7 @@ class JobsChScraper(PaginatedJobScraper):
             title=title,
             company=self._organization_name(organization),
             location=self._location_name(location),
+            country_code="CH",
             description=description,
             requirements=self._strip_html(
                 payload.get("qualifications") or payload.get("skills")

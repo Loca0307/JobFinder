@@ -35,6 +35,7 @@ class SwissDevJobsScraperTests(unittest.TestCase):
         jobs = self.scraper._parse_feed(FEED)
 
         self.assertEqual(len(jobs), 2)
+        self.assertTrue(all(job.country_code == "CH" for job in jobs))
         job = jobs[0]
         self.assertEqual(job.title, "Senior Platform Engineer")
         self.assertEqual(job.company, "Example AG")
