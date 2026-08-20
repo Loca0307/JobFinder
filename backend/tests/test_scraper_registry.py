@@ -2,16 +2,28 @@ import unittest
 
 from api.scrapers.registry import (
     get_all_scrapers,
+    get_company_scrapers,
     get_detail_scraper,
     get_scraper,
 )
 
 
 class ScraperRegistryTests(unittest.TestCase):
+    def setUp(self):
+        get_company_scrapers.cache_clear()
+
     def test_returns_all_enabled_scrapers(self):
         self.assertEqual(
             {scraper.source_name for scraper in get_all_scrapers()},
-            {"jobs.ch", "jobup.ch", "swissdevjobs.ch"},
+            {
+                "jobs.ch",
+                "jobup.ch",
+                "swissdevjobs.ch",
+                "company:scandit",
+                "company:on-running",
+                "company:rivr",
+                "company:swissborg",
+            },
         )
 
     def test_resolves_scraper_by_canonical_source_name(self):
@@ -27,6 +39,7 @@ class ScraperRegistryTests(unittest.TestCase):
         self.assertIsNotNone(get_detail_scraper("jobs.ch"))
         self.assertIsNotNone(get_detail_scraper("jobup.ch"))
         self.assertIsNone(get_detail_scraper("swissdevjobs.ch"))
+        self.assertIsNone(get_detail_scraper("company:scandit"))
 
 
 if __name__ == "__main__":

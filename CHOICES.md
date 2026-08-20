@@ -67,20 +67,21 @@ source-specific branches. Sources only implement capabilities they support.
 
 ## 3. Central Scraper Registry
 
-**Choice:** Keep enabled scraper factories in one registry and resolve sources
-by canonical name.
+**Choice:** Keep fixed board factories and validated company-catalog expansion
+in one registry, and resolve every resulting source by canonical name.
 
-**Why:** New sources can be enabled without changing route or orchestration
-logic. Cached factories also allow a scraper instance to retain its shared
-rate limiter.
+**Why:** New board adapters and new companies can be enabled without changing
+route or orchestration logic. A catalog entry becomes one stable
+`company:<id>` source, while cached factories and company instances retain
+their shared rate limiters.
 
 **Other options:**
 
 - Hard-coded source checks in routes: simpler initially, but tightly coupled.
 - Dependency-injection container: useful in a larger application, but excessive
   for the current number of services.
-- Configuration-based dynamic loading: flexible, but harder to validate and
-  debug.
+- Arbitrary Python class paths loaded from configuration: flexible, but harder
+  to validate, package, and debug than a typed target catalog.
 
 ## 4. Live Synchronous Search
 
@@ -193,9 +194,9 @@ instances each enforce their own independent limit.
 
 ## 10. Lazy Job Detail Loading
 
-**Choice:** Return lightweight jobs.ch summaries during search and fetch the
-full detail only when a user selects an incomplete result. Complete RSS jobs
-skip this request.
+**Choice:** Return lightweight JobCloud summaries during search and fetch the
+full detail only when a user selects an incomplete result. Complete RSS and
+company ATS jobs skip this request.
 
 **Why:** It dramatically reduces requests, source load, Lambda duration, and
 initial response latency. If 100 results are returned and four are opened, only
@@ -226,8 +227,9 @@ scraping multiple presentation pages.
 
 ## 12. Structured Data Before HTML Fallbacks
 
-**Choice:** Parse embedded application JSON for jobs.ch listings and schema.org
-`JobPosting` JSON-LD for details, falling back to HTML when needed.
+**Choice:** Parse embedded application JSON for JobCloud listings, schema.org
+`JobPosting` JSON-LD for details, and public Greenhouse or Lever JSON APIs for
+company vacancies, falling back to HTML only where needed.
 
 **Why:** Structured data is usually easier to validate and less coupled to page
 layout than presentation HTML.
@@ -312,7 +314,8 @@ without first writing jobs to a database.
 sources fail and HTTP 502 only when every source fails.
 
 **Why:** One changed or unavailable website should not prevent users from
-receiving jobs from healthy sources.
+receiving jobs from healthy sources. Each catalogued company is a separate
+source, so one broken career board does not hide results from other companies.
 
 **Other options:**
 
@@ -537,11 +540,13 @@ receive only their required deployment permissions.
 
 ## 31. Mocked and Deterministic Tests
 
-**Choice:** Test parsers, retries, concurrency, routes, and failure behavior
-without live network dependencies.
+**Choice:** Test parsers, retries, concurrency, routes, catalog validation,
+local ATS filtering, and Swiss territory evidence without live network
+dependencies.
 
-**Why:** Tests remain fast, repeatable, CI-friendly, and do not create unwanted
-traffic to job boards.
+**Why:** Mocked Greenhouse and Lever payloads, like the existing board fixtures,
+keep tests fast, repeatable, CI-friendly, and free of unwanted traffic to job
+boards or company career systems.
 
 **Other options:**
 
@@ -602,13 +607,54 @@ later if jobup.ch develops a different structure.
 boundary, then keep only exact `CH` values in the existing scrape orchestration
 step.
 
-**Why:** The current sources are Swiss-only and their listing and RSS payloads
-do not consistently expose a country field. They therefore assign `CH` from
-trusted source scope, while one central check still rejects foreign or
-unclassified output from future sources and keeps that policy out of the route
-and frontend.
+**Why:** jobs.ch, jobup.ch, and SwissDevJobs assign `CH` from their trusted
+Swiss-only scope. Company ATS boards are global, so their adapters prefer a
+structured country value and otherwise require a reviewed Swiss country,
+canton, or employment-centre name. Unknown and foreign ATS locations stay out
+of the response, while the route and frontend remain source-neutral.
 
-**Other options:** Relying only on upstream country fields does not work for the
-current summary payloads. Inferring the country from source names in the
-orchestrator would couple it to registry details. Accepting missing country
-codes would weaken the Switzerland-only guarantee.
+**Other options:**
+
+- Trust every vacancy from a Swiss company's board: simple, but global
+  Greenhouse and Lever boards contain foreign jobs.
+- Geocode every ATS location: broader coverage, but adds latency, network
+  dependence, cost, and fuzzy-match errors to live search.
+- Accept missing country codes: preserves uncertain jobs, but weakens the
+  Switzerland-only product guarantee.
+- Infer country from source names in orchestration: avoids adapter work, but
+  couples a central policy to registry details and still misclassifies global
+  boards.
+
+## 35. ATS-First Company Career Sources
+
+**Choice:** Collect selected companies' public vacancies through reusable
+Greenhouse and Lever adapters. Keep provider identifiers in a validated JSON
+catalog and instantiate one source named `company:<stable-id>` for each target.
+
+**Why:** Public ATS JSON is structured and less coupled to company-page layouts
+than bespoke HTML selectors. A catalog adds another company using a supported
+ATS without scraper changes, and separate source instances preserve
+company-level failure isolation. The adapters return complete jobs, apply the
+live query locally, and keep only the parser and target ID in `raw_payload` to
+avoid repeating full descriptions in synchronous Lambda responses, browser
+caches, and saved interaction snapshots. Lever uses
+the existing five-page default and one empty-page probe to distinguish an exact
+boundary from truncation.
+
+**Other options:**
+
+- Generic company-page HTML or JSON-LD extraction: reaches some custom sites,
+  but cannot reliably enumerate every vacancy and needs site-specific handling.
+- Playwright: supports some JavaScript-only sites, but increases Lambda size,
+  runtime, and maintenance cost.
+- One scraper per company: straightforward initially, but duplicates provider
+  parsing and makes ATS changes harder to repair consistently.
+- Automatic ATS discovery: reduces catalog maintenance, but adds probing,
+  ambiguous matches, and more external requests to each live search.
+
+**Limitation:** Only public Greenhouse and Lever boards with manually supplied
+identifiers are supported. Login-only, blocked, custom, and other ATS systems
+remain unsupported; the implementation does not bypass access controls.
+Provider schema changes fail only the affected `company:<id>` source.
+Lever boards exceeding the five-page ceiling also fail that source
+visibly instead of returning an apparently complete truncated result.

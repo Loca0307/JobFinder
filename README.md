@@ -13,7 +13,10 @@ the jobs that matter.
 
 ## What is implemented
 
-- Live search across **jobs.ch**, **jobup.ch**, and **SwissDevJobs**
+- Live search across **jobs.ch**, **jobup.ch**, **SwissDevJobs**, and selected
+  company career sites
+- Public Greenhouse and Lever API adapters for **Scandit**, **On**, **RIVR**,
+  and **SwissBorg**
 - A common job model shared by every source
 - Concurrent source and page fetching with configurable limits
 - Retries, timeouts, rate limiting, and isolated scraper failures
@@ -60,14 +63,15 @@ Next.js dashboard
        │
        ▼
 FastAPI API ───────► scraper registry
+                         ├── jobs.ch
+                         ├── jobup.ch
+                         ├── SwissDevJobs
+                         └── company catalog (one source per target)
+                              ├── Greenhouse: Scandit, On
+                              └── Lever: RIVR, SwissBorg
                          │
-              ┌──────────┼──────────┐
-              ▼          ▼          ▼
-           jobs.ch    jobup.ch   SwissDevJobs
-              │          │          │
-              └──────────┼──────────┘
                          ▼
-              normalize + deduplicate
+              Swiss filter + deduplicate
                          │
              ┌───────────┴───────────┐
              ▼                       ▼
@@ -81,17 +85,22 @@ the same Pydantic model, which keeps source-specific parsing out of the API and
 frontend.
 
 The two JobCloud sources return lightweight summaries first. Full details are
-requested only when a user opens a result. SwissDevJobs exposes an RSS feed, so
-its entries can be collected in one structured request. If a source or page
-fails, the application preserves successful results and reports a partial run
-instead of failing the entire search.
+requested only when a user opens a result. SwissDevJobs exposes an RSS feed.
+Each catalogued company becomes an independent `company:<id>` source backed by
+its public Greenhouse or Lever API, and returns complete jobs without a second
+detail request. Company results are filtered locally by the requested keywords
+and location, then retained only when structured country data or conservative
+Swiss location evidence identifies them as Swiss vacancies. If a source or
+page fails, the application preserves successful results and reports a partial
+run instead of failing the entire search.
 
 ## Engineering decisions I would highlight
 
 **Use structured data before scraping presentation HTML.** jobs.ch and
 jobup.ch are parsed from embedded application data and schema.org job postings,
-with HTML kept as a fallback. This is more stable than coupling the scraper to
-page styling.
+while company vacancies use public Greenhouse and Lever JSON APIs. HTML is kept
+for job-description cleanup and the JobCloud fallback, avoiding unnecessary
+coupling to presentation layouts.
 
 **Be concurrent, but bounded.** Sources and paginated results are fetched in
 parallel because the workload is network-bound. Worker limits and per-source
@@ -129,7 +138,7 @@ More detailed reasoning, including alternatives considered, is recorded in
 | Persistence | DynamoDB and browser `localStorage` |
 | AWS | Lambda, S3, CloudFront, IAM |
 | Delivery | Docker, Terraform, GitHub Actions |
-| Testing | pytest, mocked HTTP and deterministic fixtures |
+| Testing | unittest, mocked HTTP and deterministic fixtures |
 
 ## Repository structure
 
@@ -138,6 +147,8 @@ backend/
   api/
     routes/       # FastAPI endpoints
     scrapers/     # source adapters and shared HTTP behavior
+      ats/        # Greenhouse, Lever, target validation, and local filtering
+      company_targets.json
     services/     # orchestration, normalization, and interactions
     data/         # API and persistence models
   tests/
@@ -161,13 +172,15 @@ service at `http://localhost:8000`.
 
 The backend expects AWS credentials and a DynamoDB table named `Jobs` for
 starred/applied interactions. The table uses string keys named `PK` and `SK`.
-Live search itself does not require database writes.
+Live search itself does not require database writes. Company targets live in
+`backend/api/scrapers/company_targets.json`; edit that validated catalog and
+restart the backend to change company coverage.
 
 To run the backend tests:
 
 ```bash
 cd backend
-python -m pytest
+python -m unittest discover -s tests -v
 ```
 
 To check the production frontend build:
@@ -187,7 +200,9 @@ live sites.
 The current build uses a single default user and shared Basic authentication
 for a private staging deployment; it is not a production identity system.
 Search is synchronous, rate limits are process-local, and browser-cached
-results do not yet expire.
+results do not yet expire. Company coverage is a manually reviewed catalog and
+currently supports only public Greenhouse and Lever boards; it does not bypass
+login-only or blocked career systems.
 
 The next branch of the project will build on this foundation with:
 
